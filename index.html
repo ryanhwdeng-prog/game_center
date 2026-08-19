@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="topbar">
+      <button class="brand" data-action="menu" aria-label="Back to game menu"><span class="brand-mark">+</span><span>GAME<br>CENTER</span></button>
+      <div class="status"><span class="status-dot"></span><span id="statusText">ARCADE ONLINE</span></div>
+      <button class="sound-button" data-action="sound" aria-label="Toggle sound">SOUND <span id="soundState">ON</span></button>
+    </header>
+    <section id="menuView" class="view menu-view">
+      <div class="menu-intro"><p class="eyebrow">TWO SMALL WORLDS / ONE BIG PLAYGROUND</p><h1>Choose your<br><em>adventure.</em></h1><p class="intro-copy">A tiny collection of tactile browser games. No installs, no loading screens. Just pick a card and play.</p></div>
+      <div class="game-grid">
+        <button class="game-card bear-card" data-game="bear"><span class="card-number">01</span><span class="card-art bear-art"><span class="sun"></span><span class="hill hill-one"></span><span class="hill hill-two"></span><span class="mini-bear">●</span></span><span class="card-info"><span class="card-kicker">A WEATHER SURVIVAL GAME</span><strong>Cursor Bear</strong><span>Guide a curious bear through thunder, wind, and an unpredictable week.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
+        <button class="game-card cat-card" data-game="cat"><span class="card-number">02</span><span class="card-art cat-art"><span class="equalizer"></span><span class="mini-cat">⌁</span></span><span class="card-info"><span class="card-kicker">A SPRINGY MUSIC TOY</span><strong>Stretchy Cat Rap</strong><span>Grab the cat, pull it wide, and let the beat bring everything back.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
+      </div>
+      <p class="menu-foot">MOVE WITH YOUR MOUSE / TOUCH &nbsp;•&nbsp; ESC TO RETURN</p>
+    </section>
+    <section id="gameView" class="view game-view hidden">
+      <div class="game-heading"><button class="back-button" data-action="menu">← MENU</button><div><p id="gameKicker" class="eyebrow">NOW PLAYING</p><h2 id="gameTitle">Game</h2></div><button id="resetButton" class="reset-button">RESET <span>R</span></button></div>
+      <div class="canvas-wrap"><canvas id="gameCanvas" width="1000" height="650"></canvas><div id="gameHint" class="canvas-hint"></div></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
