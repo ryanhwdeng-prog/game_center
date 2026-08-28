@@ -2,6 +2,10 @@ const canvas = document.querySelector('#gameCanvas');
 const ctx = canvas.getContext('2d');
 const menuView = document.querySelector('#menuView');
 const gameView = document.querySelector('#gameView');
+const authView = document.querySelector('#authView');
+const authForm = document.querySelector('#authForm');
+const passwordInput = document.querySelector('#passwordInput');
+const authError = document.querySelector('#authError');
 const title = document.querySelector('#gameTitle');
 const kicker = document.querySelector('#gameKicker');
 const hint = document.querySelector('#gameHint');
@@ -11,6 +15,22 @@ let soundEnabled = true;
 let audioContext = null, beatTimer = 0, beatStep = 0;
 const keys = {};
 const pointer = { x: W / 2, y: H / 2, down: false };
+const GAME_PASSWORD = '540612';
+let authenticated = false;
+
+authForm.addEventListener('submit', event => {
+  event.preventDefault();
+  if (passwordInput.value === GAME_PASSWORD) {
+    authenticated = true;
+    authView.classList.add('hidden');
+    menuView.classList.remove('hidden');
+    authError.textContent = '';
+    passwordInput.value = '';
+    return;
+  }
+  authError.textContent = 'Incorrect password. Try again.';
+  passwordInput.select();
+});
 
 document.querySelectorAll('[data-game]').forEach(card => card.addEventListener('click', () => startGame(card.dataset.game)));
 document.querySelectorAll('[data-action="menu"]').forEach(button => button.addEventListener('click', showMenu));
@@ -27,8 +47,8 @@ function locate(event) { const rect = canvas.getBoundingClientRect(); pointer.x 
 canvas.addEventListener('pointermove', locate);
 canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; activeGame?.pointerDown(); });
 window.addEventListener('pointerup', () => { pointer.down = false; activeGame?.pointerUp?.(); });
-function showMenu() { cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
-function startGame(name) { cancelAnimationFrame(raf); const games = { bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' }, cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' }, balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' } }; const selected = games[name]; if (!selected) return; activeGame = new selected.game(); menuView.classList.add('hidden'); gameView.classList.remove('hidden'); title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING'; hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500); if (soundEnabled) startBeat(); last = performance.now(); loop(last); }
+function showMenu() { if (!authenticated) return; cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
+function startGame(name) { if (!authenticated) return; cancelAnimationFrame(raf); const games = { bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' }, cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' }, balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' } }; const selected = games[name]; if (!selected) return; activeGame = new selected.game(); menuView.classList.add('hidden'); gameView.classList.remove('hidden'); title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING'; hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500); if (soundEnabled) startBeat(); last = performance.now(); loop(last); }
 function loop(now) { if (!activeGame) return; const dt = Math.min((now - last) / 1000, .033); last = now; activeGame.update(dt, now / 1000); activeGame.draw(ctx, now / 1000); raf = requestAnimationFrame(loop); }
 function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
 function vector(x, y) { return { x, y }; }

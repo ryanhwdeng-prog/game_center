@@ -11,12 +11,27 @@
 </head>
 <body>
   <main class="app-shell">
+    <section id="authView" class="auth-view" aria-labelledby="authTitle">
+      <div class="auth-panel">
+        <p class="eyebrow">PRIVATE ARCADE / ACCESS REQUIRED</p>
+        <h1 id="authTitle">Enter the<br><em>password.</em></h1>
+        <p class="auth-copy">This game center is for invited players.</p>
+        <form id="authForm" class="auth-form">
+          <label for="passwordInput">PASSWORD</label>
+          <div class="auth-input-row">
+            <input id="passwordInput" name="password" type="password" inputmode="numeric" autocomplete="off" required autofocus>
+            <button type="submit">ENTER</button>
+          </div>
+          <p id="authError" class="auth-error" role="alert" aria-live="polite"></p>
+        </form>
+      </div>
+    </section>
     <header class="topbar">
       <button class="brand" data-action="menu" aria-label="Back to game menu"><span class="brand-mark">+</span><span>GAME CENTER<br>HAVE FUN!</span></button>
       <div class="status"><span class="status-dot"></span><span id="statusText">ARCADE ONLINE</span></div>
       <button class="sound-button" data-action="sound" aria-label="Toggle sound">SOUND <span id="soundState">ON</span></button>
     </header>
-    <section id="menuView" class="view menu-view">
+    <section id="menuView" class="view menu-view hidden">
       <div class="menu-intro"><p class="eyebrow">TWO SMALL WORLDS / ONE BIG PLAYGROUND</p><h1>Choose your<br><em>adventure.</em></h1><p class="intro-copy">A tiny collection of tactile browser games. No installs, no loading screens. Just pick a card and play.</p></div>
       <div class="game-grid">
         <button class="game-card bear-card" data-game="bear"><span class="card-number">01</span><span class="card-art bear-art"><span class="sun"></span><span class="hill hill-one"></span><span class="hill hill-two"></span><span class="mini-bear">●</span></span><span class="card-info"><span class="card-kicker">A WEATHER SURVIVAL GAME</span><strong>Cursor Bear</strong><span>Guide a curious bear through thunder, wind, and an unpredictable week.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>

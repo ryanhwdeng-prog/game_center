@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from getpass import getpass
 from pathlib import Path
 
 import pygame
@@ -9,6 +10,7 @@ import pygame
 ROOT = Path(__file__).resolve().parent
 WINDOW_WIDTH = 1000
 WINDOW_HEIGHT = 700
+GAME_PASSWORD = "540612"
 
 
 class GameCard:
@@ -93,6 +95,10 @@ def draw_center_menu(screen, games, hovered_index, selected_index, quit_button):
 
 
 def main():
+    if getpass("Enter game center password: ") != GAME_PASSWORD:
+        print("Incorrect password.")
+        return
+
     pygame.init()
     screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
     pygame.display.set_caption("Game Center")
