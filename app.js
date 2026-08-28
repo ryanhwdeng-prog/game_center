@@ -41,14 +41,28 @@ document.querySelector('[data-action="sound"]').addEventListener('click', () => 
   if (soundEnabled) startBeat(); else stopBeat();
 });
 document.querySelector('#resetButton').addEventListener('click', () => activeGame?.reset());
-window.addEventListener('keydown', event => { keys[event.key.toLowerCase()] = true; if (event.key === 'Escape' && activeGame) showMenu(); if (event.key.toLowerCase() === 'r') activeGame?.reset(); });
+window.addEventListener('keydown', event => {
+  keys[event.key.toLowerCase()] = true;
+  if (event.key === 'Escape' && activeGame) showMenu();
+  if (activeGame && typeof activeGame.handleKey === 'function') {
+    if (activeGame.mode === 'guess' || activeGame.mode === 'edit') {
+      const isTypingInPasswordGame = activeGame.mode === 'guess' || activeGame.activeField === 'newPassword' || activeGame.activeField === 'newTitle';
+      if (event.key.toLowerCase() === 'r' && !isTypingInPasswordGame) {
+        activeGame.reset();
+      }
+      activeGame.handleKey(event);
+      return;
+    }
+  }
+  if (event.key.toLowerCase() === 'r') activeGame?.reset();
+});
 window.addEventListener('keyup', event => { keys[event.key.toLowerCase()] = false; });
 function locate(event) { const rect = canvas.getBoundingClientRect(); pointer.x = (event.clientX - rect.left) * W / rect.width; pointer.y = (event.clientY - rect.top) * H / rect.height; }
 canvas.addEventListener('pointermove', locate);
 canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; activeGame?.pointerDown(); });
 window.addEventListener('pointerup', () => { pointer.down = false; activeGame?.pointerUp?.(); });
 function showMenu() { if (!authenticated) return; cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
-function startGame(name) { if (!authenticated) return; cancelAnimationFrame(raf); const games = { bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' }, cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' }, balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' } }; const selected = games[name]; if (!selected) return; activeGame = new selected.game(); menuView.classList.add('hidden'); gameView.classList.remove('hidden'); title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING'; hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500); if (soundEnabled) startBeat(); last = performance.now(); loop(last); }
+function startGame(name) { if (!authenticated) return; cancelAnimationFrame(raf); const games = { bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' }, cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' }, balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' }, guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' } }; const selected = games[name]; if (!selected) return; activeGame = new selected.game(); menuView.classList.add('hidden'); gameView.classList.remove('hidden'); title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING'; hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500); if (soundEnabled) startBeat(); last = performance.now(); loop(last); }
 function loop(now) { if (!activeGame) return; const dt = Math.min((now - last) / 1000, .033); last = now; activeGame.update(dt, now / 1000); activeGame.draw(ctx, now / 1000); raf = requestAnimationFrame(loop); }
 function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
 function vector(x, y) { return { x, y }; }
@@ -91,6 +105,190 @@ class PopBalloonGame {
 }
 
 function drawBalloon(c, point, radius, color) { c.save(); c.translate(point.x, point.y); c.fillStyle = color; c.shadowColor = 'rgba(0,0,0,.25)'; c.shadowBlur = 18; c.beginPath(); c.ellipse(0, 0, radius * .82, radius, -.1, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0; c.fillStyle = 'rgba(255,255,255,.34)'; c.beginPath(); c.ellipse(-radius * .3, -radius * .35, radius * .13, radius * .28, -.4, 0, Math.PI * 2); c.fill(); c.fillStyle = color; c.beginPath(); c.moveTo(-8, radius * .92); c.lineTo(8, radius * .92); c.lineTo(0, radius * 1.1); c.fill(); c.strokeStyle = '#e8d8d0'; c.lineWidth = 2; c.beginPath(); c.moveTo(0, radius * 1.08); c.bezierCurveTo(16, radius * 1.5, -16, radius * 1.75, 0, radius * 2.05); c.stroke(); c.restore(); }
+
+class GuessPasswordGame {
+  constructor() {
+    this.key = 'guess-my-password-state';
+    this.cheat = '2217_540612';
+    this.state = this.loadState();
+    this.guess = '';
+    this.newPassword = '';
+    this.newTitle = this.state.title;
+    this.mode = 'guess';
+    this.activeField = 'guess';
+    this.message = 'ENTER THE PASSWORD TO UNLOCK CHANGES.';
+  }
+  loadState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.key) || '{}');
+      return {
+        password: saved.password || '0000',
+        title: saved.title || 'Guess My Password'
+      };
+    } catch {
+      return { password: '0000', title: 'Guess My Password' };
+    }
+  }
+  saveState() {
+    localStorage.setItem(this.key, JSON.stringify(this.state));
+  }
+  handleKey(event) {
+    if (!event.key || event.key === 'Escape') return;
+    if (event.key === 'Enter') {
+      this.submit();
+      return;
+    }
+    if (event.key === 'Tab') {
+      if (this.mode === 'edit') {
+        this.activeField = this.activeField === 'newPassword' ? 'newTitle' : 'newPassword';
+      }
+      return;
+    }
+    if (event.key === 'Backspace') {
+      if (this.mode === 'guess') {
+        this.guess = this.guess.slice(0, -1);
+      } else if (this.activeField === 'newPassword') {
+        this.newPassword = this.newPassword.slice(0, -1);
+      } else {
+        this.newTitle = this.newTitle.slice(0, -1);
+      }
+      return;
+    }
+    if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (this.mode === 'guess') {
+      this.guess += event.key;
+    } else if (this.activeField === 'newPassword') {
+      this.newPassword += event.key;
+    } else {
+      this.newTitle += event.key;
+    }
+  }
+  submit() {
+    if (this.mode === 'guess') {
+      const guess = this.guess.trim();
+      if (guess === this.state.password || guess === this.cheat) {
+        this.mode = 'edit';
+        this.activeField = 'newPassword';
+        this.guess = '';
+        this.newPassword = '';
+        this.newTitle = this.state.title;
+        this.message = 'PASSWORD ACCEPTED. CHOOSE A NEW PASSWORD AND TITLE.';
+        return;
+      }
+      this.guess = '';
+      this.message = 'INCORRECT PASSWORD. TRY AGAIN OR USE THE CHEAT CODE.';
+      return;
+    }
+    const nextPassword = this.newPassword.trim();
+    const nextTitle = (this.newTitle || this.state.title).trim();
+    if (!nextPassword || nextPassword === this.cheat) {
+      this.message = 'THE CHEAT CODE CANNOT BE YOUR NEW PASSWORD.';
+      return;
+    }
+    this.state.password = nextPassword;
+    this.state.title = nextTitle || this.state.title;
+    this.saveState();
+    this.mode = 'guess';
+    this.activeField = 'guess';
+    this.guess = '';
+    this.newPassword = '';
+    this.newTitle = this.state.title;
+    this.message = 'PASSWORD AND TITLE SAVED.';
+  }
+  reset() {
+    this.guess = '';
+    this.newPassword = '';
+    this.newTitle = this.state.title;
+    this.mode = 'guess';
+    this.activeField = 'guess';
+    this.message = 'ENTER THE PASSWORD TO UNLOCK CHANGES.';
+  }
+  update() {}
+  draw(c) {
+    c.fillStyle = '#1b1235';
+    c.fillRect(0, 0, W, H);
+    c.fillStyle = '#fff5d6';
+    c.font = '700 52px Space Grotesk';
+    c.textAlign = 'center';
+    c.fillText(this.state.title, W / 2, 82);
+
+    c.fillStyle = '#91d5ff';
+    c.font = '500 18px Space Grotesk';
+    c.fillText('SECRET CODE / RENAME LOCK', W / 2, 118);
+
+    c.fillStyle = '#2a2242';
+    c.fillRect(110, 160, 780, 360);
+    c.strokeStyle = '#7bc0ff';
+    c.strokeRect(110, 160, 780, 360);
+
+    c.fillStyle = '#dfe9ff';
+    c.font = '600 24px Space Grotesk';
+    c.textAlign = 'left';
+    c.fillText(this.mode === 'guess' ? 'ENTER PASSWORD' : 'NEW PASSWORD', 145, 210);
+
+    const guessBox = { x: 145, y: 225, w: 710, h: 54 };
+    c.fillStyle = '#141827';
+    c.fillRect(guessBox.x, guessBox.y, guessBox.w, guessBox.h);
+    c.strokeStyle = this.mode === 'guess' && this.activeField === 'guess' ? '#90f0a2' : '#7bc0ff';
+    c.strokeRect(guessBox.x, guessBox.y, guessBox.w, guessBox.h);
+    c.fillStyle = '#f4f8ff';
+    c.font = '700 28px DM Mono';
+    c.fillText(this.mode === 'guess' ? this.guess : this.newPassword, 165, 260);
+
+    if (this.mode === 'edit') {
+      c.fillStyle = '#dfe9ff';
+      c.font = '600 24px Space Grotesk';
+      c.fillText('NEW GAME NAME', 145, 320);
+      const nameBox = { x: 145, y: 335, w: 710, h: 54 };
+      c.fillStyle = '#141827';
+      c.fillRect(nameBox.x, nameBox.y, nameBox.w, nameBox.h);
+      c.strokeStyle = this.activeField === 'newTitle' ? '#90f0a2' : '#7bc0ff';
+      c.strokeRect(nameBox.x, nameBox.y, nameBox.w, nameBox.h);
+      c.fillStyle = '#f4f8ff';
+      c.font = '700 25px DM Mono';
+      c.fillText(this.newTitle, 165, 370);
+    }
+
+    c.fillStyle = '#dfe9ff';
+    c.font = '600 22px Space Grotesk';
+    c.fillText(this.message, 145, 520);
+
+    c.fillStyle = '#90f0a2';
+    c.fillRect(690, 540, 165, 52);
+    c.fillStyle = '#183124';
+    c.font = '700 24px Space Grotesk';
+    c.textAlign = 'center';
+    c.fillText(this.mode === 'guess' ? 'TRY' : 'SAVE', 772, 575);
+    c.textAlign = 'left';
+  }
+  pointerDown() {
+    const saveButton = { x: 690, y: 540, w: 165, h: 52 };
+    if (pointer.x >= saveButton.x && pointer.x <= saveButton.x + saveButton.w && pointer.y >= saveButton.y && pointer.y <= saveButton.y + saveButton.h) {
+      this.submit();
+      return;
+    }
+
+    if (this.mode === 'guess') {
+      const guessBox = { x: 145, y: 225, w: 710, h: 54 };
+      if (pointer.x >= guessBox.x && pointer.x <= guessBox.x + guessBox.w && pointer.y >= guessBox.y && pointer.y <= guessBox.y + guessBox.h) {
+        this.activeField = 'guess';
+      }
+      return;
+    }
+
+    const newPasswordBox = { x: 145, y: 225, w: 710, h: 54 };
+    const newTitleBox = { x: 145, y: 335, w: 710, h: 54 };
+
+    if (pointer.x >= newPasswordBox.x && pointer.x <= newPasswordBox.x + newPasswordBox.w && pointer.y >= newPasswordBox.y && pointer.y <= newPasswordBox.y + newPasswordBox.h) {
+      this.activeField = 'newPassword';
+      return;
+    }
+
+    if (pointer.x >= newTitleBox.x && pointer.x <= newTitleBox.x + newTitleBox.w && pointer.y >= newTitleBox.y && pointer.y <= newTitleBox.y + newTitleBox.h) {
+      this.activeField = 'newTitle';
+    }
+  }
+}
 
 class BearGame {
   constructor() { this.image = new Image(); this.image.src = 'bear/bear.jpg'; this.reset(); }
