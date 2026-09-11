@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260828-auth">
+  <link rel="stylesheet" href="styles.css?v=20260911-notes">
 </head>
 <body>
   <main class="app-shell">
@@ -32,12 +32,16 @@
       <button class="sound-button" data-action="sound" aria-label="Toggle sound">SOUND <span id="soundState">ON</span></button>
     </header>
     <section id="menuView" class="view menu-view hidden">
-      <div class="menu-intro"><p class="eyebrow">TWO SMALL WORLDS / ONE BIG PLAYGROUND</p><h1>Choose your<br><em>adventure.</em></h1><p class="intro-copy">A tiny collection of tactile browser games. No installs, no loading screens. Just pick a card and play.</p></div>
+      <div class="menu-intro"><p class="eyebrow">EIGHT SMALL WORLDS / ONE BIG PLAYGROUND</p><h1>Choose your<br><em>adventure.</em></h1><p class="intro-copy">A tiny collection of tactile browser games. No installs, no loading screens. Just pick a card and play.</p></div>
       <div class="game-grid">
         <button class="game-card bear-card" data-game="bear"><span class="card-number">01</span><span class="card-art bear-art"><span class="sun"></span><span class="hill hill-one"></span><span class="hill hill-two"></span><span class="mini-bear">●</span></span><span class="card-info"><span class="card-kicker">A WEATHER SURVIVAL GAME</span><strong>Cursor Bear</strong><span>Guide a curious bear through thunder, wind, and an unpredictable week.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
         <button class="game-card cat-card" data-game="cat"><span class="card-number">02</span><span class="card-art cat-art"><span class="equalizer"></span><span class="mini-cat">⌁</span></span><span class="card-info"><span class="card-kicker">A SPRINGY MUSIC TOY</span><strong>Stretchy Cat Rap</strong><span>Grab the cat, pull it wide, and let the beat bring everything back.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
         <button class="game-card balloon-card" data-game="balloon"><span class="card-number">03</span><span class="card-art balloon-art"><span class="mini-balloon"></span><span class="balloon-string"></span><span class="confetti confetti-one"></span><span class="confetti confetti-two"></span><span class="confetti confetti-three"></span></span><span class="card-info"><span class="card-kicker">A TAP-TO-POP ARCADE GAME</span><strong>Pop the Balloon</strong><span>Find the balloon, tap it with your finger, and chase a bigger popping streak.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
         <button class="game-card password-card" data-game="guess"><span class="card-number">04</span><span class="card-art password-art"><span class="lock-icon">🔒</span><span class="pass-line pass-one"></span><span class="pass-line pass-two"></span></span><span class="card-info"><span class="card-kicker">A SECRET CODE PUZZLE</span><strong>Guess My Password</strong><span>Crack the lock, change the password, and rename the game.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
+        <button class="game-card runaway-card" data-game="runaway"><span class="card-number">05</span><span class="card-art runaway-art"><span class="mini-mouse">●</span><span class="mini-chaser">◆</span><span class="mouse-trail trail-one"></span><span class="mouse-trail trail-two"></span></span><span class="card-info"><span class="card-kicker">A QUICK REFLEX CHASE</span><strong>Run Away From the Cat</strong><span>Drag the mouse with your cursor and stay one step ahead of the slower cat.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
+        <button class="game-card drawing-card" data-game="drawing"><span class="card-number">06</span><span class="card-art drawing-art"><span class="drawing-spark spark-one">✦</span><span class="drawing-spark spark-two">＋</span><span class="drawing-line line-one"></span><span class="drawing-line line-two"></span><span class="drawing-brush">●</span></span><span class="card-info"><span class="card-kicker">A CREATIVE DOODLE STUDIO</span><strong>Drawing Game</strong><span>Turn a blank page into something strange, colorful, and completely yours.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
+        <button class="game-card notes-card" data-game="notes"><span class="card-number">07</span><span class="card-art notes-art"><span class="note-paper paper-one">TODO</span><span class="note-paper paper-two">IDEAS</span><span class="note-pencil">✎</span></span><span class="card-info"><span class="card-kicker">A TINY PERSONAL WORKSPACE</span><strong>Notes</strong><span>Capture thoughts, pin important ideas, and keep everything close at hand.</span><span class="card-cta">OPEN APP <b>↗</b></span></span></button>
+        <button class="game-card orbit-card" data-game="orbit"><span class="card-number">08</span><span class="card-art orbit-art"><span class="orbit-sun"></span><span class="orbit-ring ring-one"></span><span class="orbit-ring ring-two"></span><span class="orbit-moon">◆</span><span class="orbit-star star-one">✦</span><span class="orbit-star star-two">✦</span></span><span class="card-info"><span class="card-kicker">A COSMIC GARDENING TOY</span><strong>Orbit Garden</strong><span>Grow a living constellation, collect blooms, and protect your tiny sun.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
       </div>
       <p class="menu-foot">MOVE WITH YOUR MOUSE / TOUCH &nbsp;•&nbsp; ESC TO RETURN</p>
     </section>
@@ -45,7 +49,14 @@
       <div class="game-heading"><button class="back-button" data-action="menu">← MENU</button><div><p id="gameKicker" class="eyebrow">NOW PLAYING</p><h2 id="gameTitle">Game</h2></div><button id="resetButton" class="reset-button">RESET <span>R</span></button></div>
       <div class="canvas-wrap"><canvas id="gameCanvas" width="1000" height="700"></canvas><div id="gameHint" class="canvas-hint"></div></div>
     </section>
+    <section id="notesView" class="view notes-view hidden" aria-labelledby="notesTitle">
+      <div class="notes-appbar"><div><p class="eyebrow">PERSONAL WORKSPACE / LOCAL ONLY</p><h2 id="notesTitle">Notes</h2></div><div class="notes-actions"><button id="newNoteButton" class="notes-primary" type="button">＋ NEW NOTE</button><span id="saveStatus" class="save-status">ALL CHANGES SAVED</span></div></div>
+      <div class="notes-layout">
+        <aside class="notes-sidebar" aria-label="Notes list"><div class="notes-search"><label for="notesSearch">SEARCH NOTES</label><input id="notesSearch" type="search" placeholder="Search by title or text..." autocomplete="off"></div><div class="notes-filter-row"><span id="notesCount">0 NOTES</span><button id="pinnedFilter" type="button" aria-pressed="false">☆ PINNED</button></div><div id="notesList" class="notes-list"></div></aside>
+        <article class="note-editor" aria-label="Note editor"><div class="editor-toolbar"><button id="pinNoteButton" type="button" aria-pressed="false">☆ PIN</button><label class="color-picker" for="noteColor">COLOR <input id="noteColor" type="color" value="#f6d36f"></label><button id="deleteNoteButton" class="delete-note" type="button">DELETE</button></div><input id="noteTitleInput" class="note-title-input" type="text" placeholder="Note title" maxlength="80"><textarea id="noteBodyInput" class="note-body-input" placeholder="Start writing..." spellcheck="true"></textarea><div class="editor-footer"><span id="noteMeta">NEW NOTE</span><button id="exportNoteButton" type="button">DOWNLOAD .TXT ↓</button></div></article>
+      </div>
+    </section>
   </main>
-  <script src="app.js?v=20260828-auth"></script>
+  <script src="app.js?v=20260911-notes"></script>
 </body>
 </html>

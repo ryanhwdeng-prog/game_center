@@ -2,6 +2,7 @@ const canvas = document.querySelector('#gameCanvas');
 const ctx = canvas.getContext('2d');
 const menuView = document.querySelector('#menuView');
 const gameView = document.querySelector('#gameView');
+const notesView = document.querySelector('#notesView');
 const authView = document.querySelector('#authView');
 const authForm = document.querySelector('#authForm');
 const passwordInput = document.querySelector('#passwordInput');
@@ -17,6 +18,7 @@ const keys = {};
 const pointer = { x: W / 2, y: H / 2, down: false };
 const GAME_PASSWORD = '540612';
 let authenticated = false;
+let notesApp = null;
 
 authForm.addEventListener('submit', event => {
   event.preventDefault();
@@ -61,8 +63,8 @@ function locate(event) { const rect = canvas.getBoundingClientRect(); pointer.x 
 canvas.addEventListener('pointermove', locate);
 canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; activeGame?.pointerDown(); });
 window.addEventListener('pointerup', () => { pointer.down = false; activeGame?.pointerUp?.(); });
-function showMenu() { if (!authenticated) return; cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
-function startGame(name) { if (!authenticated) return; cancelAnimationFrame(raf); const games = { bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' }, cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' }, balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' }, guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' } }; const selected = games[name]; if (!selected) return; activeGame = new selected.game(); menuView.classList.add('hidden'); gameView.classList.remove('hidden'); title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING'; hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500); if (soundEnabled) startBeat(); last = performance.now(); loop(last); }
+function showMenu() { if (!authenticated) return; cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
+function startGame(name) { if (!authenticated) return; if (name === 'notes') { cancelAnimationFrame(raf); activeGame = null; menuView.classList.add('hidden'); gameView.classList.add('hidden'); notesView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'NOTES OPEN'; notesApp ||= new NotesApp(); notesApp.open(); return; } cancelAnimationFrame(raf); const games = { bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' }, cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' }, balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' }, guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' }, runaway: { game: RunAwayGame, title: 'Run Away From the Cat', kicker: 'A QUICK REFLEX CHASE', hint: 'HOLD THE MOUSE AND DRAG IT AWAY FROM THE CAT' }, drawing: { game: DrawingGame, title: 'Drawing Game', kicker: 'A CREATIVE DOODLE STUDIO', hint: 'HOLD + DRAG TO DRAW • CLICK THE TOOLS TO PLAY' }, orbit: { game: OrbitGardenGame, title: 'Orbit Garden', kicker: 'A COSMIC GARDENING TOY', hint: 'MOVE THE MOON • TAP TO SEND AN ORBIT PULSE' } }; const selected = games[name]; if (!selected) return; activeGame = new selected.game(); menuView.classList.add('hidden'); notesView.classList.add('hidden'); gameView.classList.remove('hidden'); title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING'; hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500); if (soundEnabled) startBeat(); last = performance.now(); loop(last); }
 function loop(now) { if (!activeGame) return; const dt = Math.min((now - last) / 1000, .033); last = now; activeGame.update(dt, now / 1000); activeGame.draw(ctx, now / 1000); raf = requestAnimationFrame(loop); }
 function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
 function vector(x, y) { return { x, y }; }
@@ -288,6 +290,190 @@ class GuessPasswordGame {
       this.activeField = 'newTitle';
     }
   }
+}
+
+class RunAwayGame {
+  constructor() { this.reset(); }
+  reset() { this.mouse = vector(220, 390); this.cat = vector(780, 300); this.elapsed = 0; this.best = 0; this.over = false; this.dragging = false; }
+  pointerDown() { if (!this.over && distance(pointer, this.mouse) < 90) this.dragging = true; }
+  pointerUp() { this.dragging = false; }
+  update(dt) {
+    if (this.over) return;
+    if (this.dragging) {
+      this.mouse.x = clamp(pointer.x, 64, W - 64);
+      this.mouse.y = clamp(pointer.y, 125, H - 72);
+    }
+    const chase = vector(this.mouse.x - this.cat.x, this.mouse.y - this.cat.y);
+    const chaseDistance = Math.max(1, distance(this.mouse, this.cat));
+    const catSpeed = 92;
+    this.cat.x += chase.x / chaseDistance * catSpeed * dt;
+    this.cat.y += chase.y / chaseDistance * catSpeed * dt;
+    this.elapsed += dt;
+    this.best = Math.max(this.best, this.elapsed);
+    if (distance(this.mouse, this.cat) < 58) this.over = true;
+  }
+  draw(c, time) {
+    c.fillStyle = '#183c3a'; c.fillRect(0, 0, W, H);
+    c.strokeStyle = 'rgba(128, 221, 179, .18)'; c.lineWidth = 2;
+    for (let x = 0; x <= W; x += 50) { c.beginPath(); c.moveTo(x, 96); c.lineTo(x, H); c.stroke(); }
+    for (let y = 110; y <= H; y += 50) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); }
+    c.fillStyle = '#eaffd0'; c.font = '700 39px Space Grotesk'; c.textAlign = 'center'; c.fillText('RUN AWAY FROM THE CAT', W / 2, 62);
+    c.fillStyle = '#8be0b5'; c.font = '500 17px DM Mono'; c.fillText('KEEP THE MOUSE MOVING', W / 2, 91);
+    c.textAlign = 'left'; c.fillStyle = '#f8e7a2'; c.font = '700 22px Space Grotesk'; c.fillText(`TIME  ${this.elapsed.toFixed(1)}s`, 25, 40);
+    c.fillStyle = '#d4f3dc'; c.font = '15px DM Mono'; c.fillText(`BEST  ${this.best.toFixed(1)}s`, 27, 67);
+    drawChaseCat(c, this.cat, time); drawMouse(c, this.mouse, this.dragging, time);
+    c.textAlign = 'right'; c.fillStyle = '#d4f3dc'; c.font = '15px DM Mono'; c.fillText('[HOLD + DRAG] MOVE  •  [R] RESET  •  [ESC] MENU', W - 22, H - 20);
+    if (this.over) {
+      c.fillStyle = 'rgba(8, 25, 25, .82)'; c.fillRect(0, 0, W, H); roundedRect(c, 245, 235, 510, 240, 18, '#351f35', '#ff9a76');
+      c.textAlign = 'center'; c.fillStyle = '#fff4d6'; c.font = '700 54px Space Grotesk'; c.fillText('CAUGHT!', W / 2, 325); c.font = '20px Space Grotesk'; c.fillText(`You lasted ${this.elapsed.toFixed(1)} seconds.`, W / 2, 373); c.font = '500 14px DM Mono'; c.fillText('PRESS R OR USE RESET TO RUN AGAIN', W / 2, 425);
+    }
+  }
+}
+
+class NotesApp {
+  constructor() {
+    this.storageKey = 'game-center-notes';
+    this.notes = this.load();
+    this.activeId = this.notes[0]?.id || null;
+    this.search = document.querySelector('#notesSearch');
+    this.list = document.querySelector('#notesList');
+    this.titleInput = document.querySelector('#noteTitleInput');
+    this.bodyInput = document.querySelector('#noteBodyInput');
+    this.colorInput = document.querySelector('#noteColor');
+    this.status = document.querySelector('#saveStatus');
+    this.bindEvents();
+  }
+  load() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(this.storageKey) || 'null');
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch {}
+    return [{ id: crypto.randomUUID(), title: 'Welcome to Notes', body: 'A quiet place for bright ideas.\n\nStart typing here, then pin anything you want to keep close.', color: '#f6d36f', pinned: true, updated: Date.now() }];
+  }
+  bindEvents() {
+    document.querySelector('#newNoteButton').addEventListener('click', () => this.create());
+    document.querySelector('#pinnedFilter').addEventListener('click', event => { event.currentTarget.setAttribute('aria-pressed', event.currentTarget.getAttribute('aria-pressed') !== 'true'); this.renderList(); });
+    document.querySelector('#pinNoteButton').addEventListener('click', () => this.togglePin());
+    document.querySelector('#deleteNoteButton').addEventListener('click', () => this.remove());
+    document.querySelector('#exportNoteButton').addEventListener('click', () => this.exportNote());
+    this.search.addEventListener('input', () => this.renderList());
+    this.titleInput.addEventListener('input', () => this.updateActive());
+    this.bodyInput.addEventListener('input', () => this.updateActive());
+    this.colorInput.addEventListener('input', () => this.updateActive());
+    document.addEventListener('keydown', event => {
+      if (!notesView.classList.contains('hidden')) {
+        if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n') { event.preventDefault(); this.create(); }
+        if ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key.toLowerCase() === 'p') { event.preventDefault(); this.togglePin(); }
+      }
+    });
+  }
+  open() { this.renderList(); this.select(this.activeId || this.notes[0]?.id); }
+  active() { return this.notes.find(note => note.id === this.activeId); }
+  create() { const note = { id: crypto.randomUUID(), title: 'Untitled note', body: '', color: '#b9e3d0', pinned: false, updated: Date.now() }; this.notes.unshift(note); this.activeId = note.id; this.persist(); this.renderList(); this.select(note.id); this.titleInput.focus(); this.titleInput.select(); }
+  select(id) { const note = this.notes.find(item => item.id === id); if (!note) return; this.activeId = id; this.titleInput.value = note.title; this.bodyInput.value = note.body; this.colorInput.value = note.color; document.querySelector('#pinNoteButton').textContent = note.pinned ? '★ PINNED' : '☆ PIN'; document.querySelector('#pinNoteButton').setAttribute('aria-pressed', note.pinned); document.querySelector('#noteMeta').textContent = `UPDATED ${new Date(note.updated).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toUpperCase()}`; this.renderList(); }
+  updateActive() { const note = this.active(); if (!note) return; note.title = this.titleInput.value || 'Untitled note'; note.body = this.bodyInput.value; note.color = this.colorInput.value; note.updated = Date.now(); this.persist(); this.renderList(); document.querySelector('#noteMeta').textContent = 'SAVING...'; clearTimeout(this.saveLabelTimer); this.saveLabelTimer = setTimeout(() => { document.querySelector('#noteMeta').textContent = `UPDATED ${new Date(note.updated).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toUpperCase()}`; }, 450); }
+  togglePin() { const note = this.active(); if (!note) return; note.pinned = !note.pinned; note.updated = Date.now(); this.persist(); this.select(note.id); }
+  remove() { if (!this.active() || !confirm('Delete this note?')) return; this.notes = this.notes.filter(note => note.id !== this.activeId); if (!this.notes.length) this.create(); else { this.activeId = this.notes[0].id; this.renderList(); this.select(this.activeId); } this.persist(); }
+  persist() { localStorage.setItem(this.storageKey, JSON.stringify(this.notes)); this.status.textContent = 'ALL CHANGES SAVED'; }
+  renderList() { const query = this.search.value.trim().toLowerCase(); const pinnedOnly = document.querySelector('#pinnedFilter').getAttribute('aria-pressed') === 'true'; const visible = this.notes.filter(note => (!pinnedOnly || note.pinned) && (!query || `${note.title} ${note.body}`.toLowerCase().includes(query))); document.querySelector('#notesCount').textContent = `${visible.length} ${visible.length === 1 ? 'NOTE' : 'NOTES'}`; this.list.innerHTML = visible.map(note => `<button class="note-list-item ${note.id === this.activeId ? 'selected' : ''}" data-note-id="${note.id}" style="--note-accent:${note.color}" type="button"><span class="note-item-top"><strong>${this.escape(note.title || 'Untitled note')}</strong><span>${note.pinned ? '★' : ''}</span></span><span>${this.escape(note.body.replace(/\s+/g, ' ').trim().slice(0, 72) || 'No text yet')}</span><small>${this.relative(note.updated)}</small></button>`).join('') || '<p class="empty-notes">No notes match that search.</p>'; this.list.querySelectorAll('[data-note-id]').forEach(item => item.addEventListener('click', () => this.select(item.dataset.noteId))); }
+  relative(timestamp) { const minutes = Math.max(0, Math.round((Date.now() - timestamp) / 60000)); return minutes < 1 ? 'JUST NOW' : minutes < 60 ? `${minutes}M AGO` : `${Math.round(minutes / 60)}H AGO`; }
+  escape(value) { return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character])); }
+  exportNote() { const note = this.active(); if (!note) return; const blob = new Blob([`${note.title}\n\n${note.body}`], { type: 'text/plain' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${note.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase() || 'note'}.txt`; link.click(); URL.revokeObjectURL(link.href); }
+}
+
+class OrbitGardenGame {
+  constructor() { this.reset(); }
+  reset() {
+    this.sun = vector(W / 2, 370); this.moon = vector(W / 2 + 220, 370); this.target = vector(this.moon.x, this.moon.y); this.flowers = []; this.particles = []; this.score = 0; this.combo = 0; this.best = 0; this.energy = 100; this.elapsed = 0; this.pulse = 0; this.flare = 0; this.flareWarning = 0; this.flareAngle = 0; this.spawnTimer = 0; this.lost = false;
+    for (let index = 0; index < 8; index++) this.spawnFlower();
+  }
+  spawnFlower() { const angle = Math.random() * Math.PI * 2; const radius = 105 + Math.random() * 240; this.flowers.push({ x: this.sun.x + Math.cos(angle) * radius, y: this.sun.y + Math.sin(angle) * radius, radius: 8 + Math.random() * 5, phase: Math.random() * 7 }); }
+  pointerDown() { this.pulse = 1; this.energy = Math.max(0, this.energy - 8); }
+  update(dt, time) {
+    if (this.lost) return;
+    this.elapsed += dt; this.target = vector(clamp(pointer.x, 45, W - 45), clamp(pointer.y, 125, H - 65)); this.moon.x += (this.target.x - this.moon.x) * Math.min(1, dt * 8); this.moon.y += (this.target.y - this.moon.y) * Math.min(1, dt * 8); this.pulse = Math.max(0, this.pulse - dt * 2.8); this.energy = Math.min(100, this.energy + dt * 2.2); this.spawnTimer -= dt;
+    if (this.spawnTimer <= 0 && this.flowers.length < 12) { this.spawnFlower(); this.spawnTimer = 2.2; }
+    this.flare = Math.max(0, this.flare - dt); if (this.flareWarning > 0) { this.flareWarning -= dt; if (this.flareWarning <= 0) this.flare = 1.8; } if (this.elapsed > 5 && Math.floor(this.elapsed / 7) !== Math.floor((this.elapsed - dt) / 7)) { this.flareWarning = 1.5; this.flare = 0; this.flareAngle = Math.random() * Math.PI * 2; }
+    this.flowers = this.flowers.filter(flower => { const hit = distance(this.moon, flower) < 30; if (hit) { this.score++; this.combo++; this.best = Math.max(this.best, this.combo); this.bloom(flower, time); return false; } if (distance(this.moon, flower) > 370) this.combo = 0; return true; });
+    const moonAngle = Math.atan2(this.moon.y - this.sun.y, this.moon.x - this.sun.x); const angleDelta = Math.atan2(Math.sin(moonAngle - this.flareAngle), Math.cos(moonAngle - this.flareAngle)); if (this.flare > 0 && Math.abs(angleDelta) < .25 && distance(this.moon, this.sun) < 330) { this.energy = Math.max(0, this.energy - dt * 35); this.combo = 0; }
+    if (this.energy <= 0) this.lost = true; this.particles = this.particles.filter(particle => { particle.life -= dt * 1.6; particle.x += particle.vx * dt; particle.y += particle.vy * dt; return particle.life > 0; });
+  }
+  bloom(flower, time) { for (let index = 0; index < 12; index++) { const angle = index / 12 * Math.PI * 2; this.particles.push({ x: flower.x, y: flower.y, vx: Math.cos(angle) * (30 + Math.random() * 70), vy: Math.sin(angle) * (30 + Math.random() * 70), life: 1, color: `hsl(${(time * 50 + index * 25) % 360} 75% 67%)` }); } }
+  draw(c, time) {
+    c.fillStyle = '#0d1b2a'; c.fillRect(0, 0, W, H); c.fillStyle = 'rgba(88,159,170,.12)'; for (let index = 0; index < 40; index++) { const x = (index * 173) % W; const y = (index * 97) % H; c.beginPath(); c.arc(x, y, 1 + index % 3, 0, Math.PI * 2); c.fill(); }
+    c.strokeStyle = 'rgba(161,230,214,.25)'; c.lineWidth = 2; for (const radius of [130, 225, 315]) { c.beginPath(); c.arc(this.sun.x, this.sun.y, radius, 0, Math.PI * 2); c.stroke(); }
+    c.fillStyle = '#f6d36f'; c.shadowColor = '#f6d36f'; c.shadowBlur = 40 + Math.sin(time * 3) * 8; c.beginPath(); c.arc(this.sun.x, this.sun.y, 52 + Math.sin(time * 2) * 3, 0, Math.PI * 2); c.fill(); c.shadowBlur = 0;
+    this.flowers.forEach(flower => { c.save(); c.translate(flower.x, flower.y); c.rotate(time + flower.phase); c.fillStyle = '#a1e6d6'; c.beginPath(); for (let petal = 0; petal < 6; petal++) { c.rotate(Math.PI / 3); c.ellipse(0, flower.radius * .9, flower.radius * .45, flower.radius, 0, 0, Math.PI * 2); } c.fill(); c.fillStyle = '#fff4bd'; c.beginPath(); c.arc(0, 0, flower.radius * .35, 0, Math.PI * 2); c.fill(); c.restore(); });
+    if (this.flareWarning > 0 || this.flare > 0) { c.save(); c.translate(this.sun.x, this.sun.y); c.rotate(this.flareAngle); c.strokeStyle = this.flareWarning > 0 ? `rgba(255,218,111,${.55 + Math.sin(time * 16) * .25})` : `rgba(255,136,102,${this.flare / 2})`; c.lineWidth = this.flareWarning > 0 ? 5 : 16; if (this.flareWarning > 0) c.setLineDash([14, 12]); c.beginPath(); c.moveTo(68, 0); c.lineTo(330, 0); c.stroke(); c.setLineDash([]); c.restore(); }
+    this.particles.forEach(particle => { c.globalAlpha = particle.life; c.fillStyle = particle.color; c.beginPath(); c.arc(particle.x, particle.y, 4, 0, Math.PI * 2); c.fill(); }); c.globalAlpha = 1;
+    if (this.pulse > 0) { c.strokeStyle = `rgba(246,211,111,${this.pulse})`; c.lineWidth = 4; c.beginPath(); c.arc(this.moon.x, this.moon.y, 28 + (1 - this.pulse) * 70, 0, Math.PI * 2); c.stroke(); }
+    c.save(); c.translate(this.moon.x, this.moon.y); c.rotate(time * 2); c.fillStyle = '#b9f3e3'; c.shadowColor = '#a1e6d6'; c.shadowBlur = 18; c.beginPath(); c.moveTo(0, -17); c.lineTo(14, 0); c.lineTo(0, 17); c.lineTo(-14, 0); c.closePath(); c.fill(); c.restore();
+    c.textAlign = 'left'; c.fillStyle = '#f4f0e7'; c.font = '700 29px Space Grotesk'; c.fillText('ORBIT GARDEN', 25, 40); c.fillStyle = '#a1e6d6'; c.font = '14px DM Mono'; c.fillText(`BLOOMS  ${String(this.score).padStart(2, '0')}   COMBO  x${this.combo}`, 28, 68); c.textAlign = 'right'; c.fillStyle = '#f4f0e7'; c.fillText(`SUN ENERGY  ${Math.ceil(this.energy)}%`, W - 24, 39); c.fillStyle = 'rgba(255,255,255,.15)'; c.fillRect(W - 220, 53, 195, 9); c.fillStyle = '#f6d36f'; c.fillRect(W - 220, 53, 195 * this.energy / 100, 9); c.fillStyle = '#d7e9df'; c.font = '14px DM Mono'; c.fillText('[MOVE] GUIDE MOON  •  [TAP] PULSE  •  [R] RESET', W - 22, H - 20); c.textAlign = 'center'; c.fillStyle = this.flareWarning > 0 ? '#ffda6e' : '#fff4bd'; c.font = '16px Space Grotesk'; c.fillText(this.flareWarning > 0 ? 'WARNING: SOLAR FLARE INCOMING' : this.flare > 0 ? 'SOLAR FLARE! DODGE THE ORANGE RAY' : 'COLLECT THE BLOOMS • KEEP THE SUN ALIVE', W / 2, 102);
+    if (this.lost) { c.fillStyle = 'rgba(7,19,31,.86)'; c.fillRect(0, 0, W, H); roundedRect(c, 235, 245, 530, 220, 18, '#402438', '#ff9c7a'); c.fillStyle = '#fff4bd'; c.font = '700 52px Space Grotesk'; c.fillText('SUNLIGHT LOST', W / 2, 332); c.fillStyle = '#f5d8d0'; c.font = '18px DM Mono'; c.fillText(`The flare reached the sun after ${this.score} blooms.`, W / 2, 375); c.font = '14px DM Mono'; c.fillText('PRESS R OR USE RESET TO TRY AGAIN', W / 2, 422); }
+  }
+}
+
+class DrawingGame {
+  constructor() { this.reset(); }
+  reset() { this.strokes = []; this.activeStroke = null; this.color = '#17211d'; this.size = 10; this.rainbow = false; this.mirror = false; this.totalPoints = 0; }
+  pointerDown() {
+    const tool = this.toolAt(pointer.x, pointer.y);
+    if (tool) { this.useTool(tool); return; }
+    if (pointer.y < 92) return;
+    this.activeStroke = { color: this.color, size: this.size, points: [] };
+    this.addPoint(pointer.x, pointer.y);
+  }
+  pointerUp() { if (this.activeStroke?.points.length > 1) this.strokes.push(this.activeStroke); this.activeStroke = null; }
+  update() { if (this.activeStroke && pointer.down) this.addPoint(pointer.x, pointer.y); }
+  addPoint(x, y) {
+    if (y < 92) return;
+    const point = { x: clamp(x, 18, W - 18), y: clamp(y, 102, H - 18) };
+    const points = this.activeStroke.points;
+    if (!points.length || distance(point, points[points.length - 1]) > 2) { points.push(point); this.totalPoints++; }
+  }
+  toolAt(x, y) {
+    if (y < 72 && x >= 24 && x <= 238) return 'color';
+    if (y < 72 && x >= 258 && x <= 365) return 'sizeDown';
+    if (y < 72 && x >= 370 && x <= 477) return 'sizeUp';
+    if (y < 72 && x >= 490 && x <= 610) return 'rainbow';
+    if (y < 72 && x >= 625 && x <= 735) return 'mirror';
+    if (y < 72 && x >= 748 && x <= 839) return 'undo';
+    if (y < 72 && x >= 852 && x <= 978) return 'clear';
+    return null;
+  }
+  useTool(tool) {
+    if (tool === 'color') this.color = ['#17211d', '#ef6351', '#4c6fff', '#f2b134', '#38a169'][this.strokes.length % 5];
+    if (tool === 'sizeDown') this.size = clamp(this.size - 3, 3, 36);
+    if (tool === 'sizeUp') this.size = clamp(this.size + 3, 3, 36);
+    if (tool === 'rainbow') this.rainbow = !this.rainbow;
+    if (tool === 'mirror') this.mirror = !this.mirror;
+    if (tool === 'undo') { this.strokes.pop(); this.totalPoints = this.strokes.reduce((sum, stroke) => sum + stroke.points.length, 0); }
+    if (tool === 'clear') this.reset();
+  }
+  draw(c, time) {
+    c.fillStyle = '#f7f4ec'; c.fillRect(0, 0, W, H); c.fillStyle = '#fff'; c.fillRect(0, 88, W, H - 88);
+    c.strokeStyle = '#e8e2d7'; c.lineWidth = 1; c.beginPath(); c.moveTo(0, 88); c.lineTo(W, 88); c.stroke();
+    c.fillStyle = '#17211d'; c.font = '700 22px Space Grotesk'; c.textAlign = 'left'; c.fillText('DRAWING GAME', 24, 31); c.fillStyle = '#758078'; c.font = '12px DM Mono'; c.fillText(`${this.totalPoints} INK POINTS`, 25, 55);
+    this.button(c, 258, 16, 101, 42, 'SIZE −', this.size <= 3); this.button(c, 370, 16, 101, 42, 'SIZE +', this.size >= 36); this.button(c, 490, 16, 113, 42, this.rainbow ? 'RAINBOW ON' : 'RAINBOW', this.rainbow); this.button(c, 625, 16, 105, 42, this.mirror ? 'MIRROR ON' : 'MIRROR', this.mirror); this.button(c, 748, 16, 91, 42, 'UNDO', false); this.button(c, 852, 16, 126, 42, 'CLEAR PAGE', false);
+    c.fillStyle = this.color; c.beginPath(); c.arc(226, 37, this.size / 2 + 6, 0, Math.PI * 2); c.fill(); [...this.strokes, ...(this.activeStroke ? [this.activeStroke] : [])].forEach(stroke => this.drawStroke(c, stroke, time));
+    c.fillStyle = 'rgba(23,33,29,.5)'; c.font = '12px DM Mono'; c.textAlign = 'center'; c.fillText(this.mirror ? 'MIRROR MODE ACTIVE' : 'MAKE A MARK • THEN MAKE ANOTHER', W / 2, H - 14); c.textAlign = 'left';
+  }
+  button(c, x, y, width, height, label, active) { roundedRect(c, x, y, width, height, 4, active ? '#d8ef63' : '#fff', '#d9d3c7'); c.fillStyle = '#17211d'; c.font = '11px DM Mono'; c.textAlign = 'center'; c.fillText(label, x + width / 2, y + 26); }
+  drawStroke(c, stroke, time) {
+    const points = stroke.points; if (points.length < 1) return;
+    c.save(); c.lineCap = 'round'; c.lineJoin = 'round'; c.lineWidth = stroke.size; c.strokeStyle = this.rainbow ? `hsl(${(time * 80 + points[0].x) % 360} 75% 52%)` : stroke.color; c.beginPath(); c.moveTo(points[0].x, points[0].y); points.slice(1).forEach(point => c.lineTo(point.x, point.y)); c.stroke();
+    if (this.mirror && points[0].x !== W / 2) { c.beginPath(); c.moveTo(W - points[0].x, points[0].y); points.slice(1).forEach(point => c.lineTo(W - point.x, point.y)); c.stroke(); } c.restore();
+  }
+}
+
+function drawMouse(c, point, dragging, time) {
+  c.save(); c.translate(point.x, point.y); c.rotate(Math.sin(time * 5) * .04); c.fillStyle = 'rgba(0,0,0,.25)'; c.beginPath(); c.ellipse(0, 33, 43, 11, 0, 0, 7); c.fill();
+  c.fillStyle = '#e8edf0'; c.beginPath(); c.ellipse(0, 0, 34, 27, 0, 0, 7); c.fill(); c.fillStyle = '#f39c9c'; c.beginPath(); c.arc(-20, -21, 14, 0, 7); c.arc(20, -21, 14, 0, 7); c.fill(); c.fillStyle = '#26353d'; c.beginPath(); c.arc(13, -5, 4, 0, 7); c.fill(); c.fillStyle = '#ef8a8a'; c.beginPath(); c.arc(32, 3, 6, 0, 7); c.fill(); c.strokeStyle = '#f39c9c'; c.lineWidth = 3; c.beginPath(); c.moveTo(-27, 12); c.bezierCurveTo(-78, 42, -78, -10, -46, 8); c.stroke();
+  if (dragging) { c.strokeStyle = '#f8e7a2'; c.lineWidth = 4; c.beginPath(); c.arc(0, 0, 47, 0, 7); c.stroke(); } c.restore();
+}
+
+function drawChaseCat(c, point, time) {
+  c.save(); c.translate(point.x, point.y); c.rotate(Math.sin(time * 8) * .05); c.fillStyle = 'rgba(0,0,0,.25)'; c.beginPath(); c.ellipse(0, 38, 48, 12, 0, 0, 7); c.fill(); c.fillStyle = '#ef8354'; c.beginPath(); c.ellipse(0, 0, 42, 34, 0, 0, 7); c.fill(); c.beginPath(); c.moveTo(-31, -20); c.lineTo(-36, -59); c.lineTo(-7, -35); c.moveTo(31, -20); c.lineTo(36, -59); c.lineTo(7, -35); c.fill(); c.fillStyle = '#452738'; c.beginPath(); c.arc(-15, -5, 5, 0, 7); c.arc(15, -5, 5, 0, 7); c.fill(); c.fillStyle = '#f7b267'; c.beginPath(); c.arc(0, 8, 6, 0, 7); c.fill(); c.strokeStyle = '#ef8354'; c.lineWidth = 10; c.beginPath(); c.arc(-30, 0, 48, 3.8, 5.6); c.stroke(); c.restore();
 }
 
 class BearGame {
