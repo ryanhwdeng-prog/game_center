@@ -55,6 +55,7 @@ window.addEventListener('keydown', event => {
       activeGame.handleKey(event);
       return;
     }
+    if (activeGame.handleKey(event)) return;
   }
   if (event.key.toLowerCase() === 'r') activeGame?.reset();
 });
@@ -64,7 +65,30 @@ canvas.addEventListener('pointermove', locate);
 canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; activeGame?.pointerDown(); });
 window.addEventListener('pointerup', () => { pointer.down = false; activeGame?.pointerUp?.(); });
 function showMenu() { if (!authenticated) return; cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
-function startGame(name) { if (!authenticated) return; if (name === 'notes') { cancelAnimationFrame(raf); activeGame = null; menuView.classList.add('hidden'); gameView.classList.add('hidden'); notesView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'NOTES OPEN'; notesApp ||= new NotesApp(); notesApp.open(); return; } cancelAnimationFrame(raf); const games = { bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' }, cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' }, balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' }, guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' }, runaway: { game: RunAwayGame, title: 'Run Away From the Cat', kicker: 'A QUICK REFLEX CHASE', hint: 'HOLD THE MOUSE AND DRAG IT AWAY FROM THE CAT' }, drawing: { game: DrawingGame, title: 'Drawing Game', kicker: 'A CREATIVE DOODLE STUDIO', hint: 'HOLD + DRAG TO DRAW • CLICK THE TOOLS TO PLAY' }, orbit: { game: OrbitGardenGame, title: 'Orbit Garden', kicker: 'A COSMIC GARDENING TOY', hint: 'MOVE THE MOON • TAP TO SEND AN ORBIT PULSE' } }; const selected = games[name]; if (!selected) return; activeGame = new selected.game(); menuView.classList.add('hidden'); notesView.classList.add('hidden'); gameView.classList.remove('hidden'); title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING'; hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500); if (soundEnabled) startBeat(); last = performance.now(); loop(last); }
+function startGame(name) { if (!authenticated) return;
+  if (name === 'notes') {
+    cancelAnimationFrame(raf); activeGame = null; menuView.classList.add('hidden'); gameView.classList.add('hidden'); notesView.classList.remove('hidden');
+    document.querySelector('#statusText').textContent = 'NOTES OPEN'; notesApp ||= new NotesApp(); notesApp.open(); return;
+  }
+  cancelAnimationFrame(raf);
+  const games = {
+    bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' },
+    cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' },
+    balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' },
+    guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' },
+    runaway: { game: RunAwayGame, title: 'Run Away From the Cat', kicker: 'A QUICK REFLEX CHASE', hint: 'HOLD THE MOUSE AND DRAG IT AWAY FROM THE CAT' },
+    drawing: { game: DrawingGame, title: 'Drawing Game', kicker: 'A CREATIVE DOODLE STUDIO', hint: 'HOLD + DRAG TO DRAW • CLICK THE TOOLS TO PLAY' },
+    orbit: { game: OrbitGardenGame, title: 'Orbit Garden', kicker: 'A COSMIC GARDENING TOY', hint: 'MOVE THE MOON • TAP TO SEND AN ORBIT PULSE' },
+    loom: { game: RainbowLoomGame, title: 'Rainbow Loom Lab', kicker: 'A COLORFUL BAND-WEAVING CHALLENGE', hint: 'PICK A COLOR • DRAG BETWEEN PEGS TO WEAVE A MATCH' },
+    amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' }
+  };
+  const selected = games[name];
+  if (!selected) return;
+  activeGame = new selected.game(); menuView.classList.add('hidden'); notesView.classList.add('hidden'); gameView.classList.remove('hidden');
+  title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING';
+  hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500);
+  if (soundEnabled) startBeat(); last = performance.now(); loop(last);
+}
 function loop(now) { if (!activeGame) return; const dt = Math.min((now - last) / 1000, .033); last = now; activeGame.update(dt, now / 1000); activeGame.draw(ctx, now / 1000); raf = requestAnimationFrame(loop); }
 function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
 function vector(x, y) { return { x, y }; }
@@ -479,8 +503,21 @@ function drawChaseCat(c, point, time) {
 class BearGame {
   constructor() { this.image = new Image(); this.image.src = 'bear/bear.jpg'; this.reset(); }
   reset() { this.bear = vector(W / 2, 340); this.velocity = vector(0, 0); this.day = 0; this.elapsed = 0; this.nextStrike = 3 + Math.random() * 3; this.strike = 0; this.shock = 0; this.shockTimer = 8; this.targetX = W / 2; this.over = false; this.won = false; }
-  update(dt, time) { if (this.over || this.won) return; this.elapsed += dt; this.day = Math.min(6, Math.floor(this.elapsed / 6)); this.nextStrike -= dt; if (this.nextStrike <= 0) { this.strike = 1.5; this.nextStrike = 3 + Math.random() * 3; this.targetX = 120 + Math.random() * 760; } if (this.strike > 0) { this.strike -= dt; if (this.strike < .35 && Math.abs(this.bear.x - this.targetX) < 90) this.over = true; } this.shockTimer -= dt; if (this.shockTimer <= 0 && this.shock <= 0) this.shock = 2.3; if (this.shock > 0) { this.shock -= dt; if (this.shock <= 0) this.shockTimer = 8 + Math.random() * 6; } const wind = vector((keys.a ? -1 : 0) + (keys.d ? 1 : 0), (keys.w ? -1 : 0) + (keys.s ? 1 : 0)); const danger = this.strike > 0 ? (this.targetX - this.bear.x) : 0; this.velocity.x += (pointer.x - this.bear.x) * 10 * dt + wind.x * 2400 * dt + (Math.abs(danger) < 250 ? -Math.sign(danger) * 6000 * dt : 0); this.velocity.y += (pointer.y - this.bear.y) * 10 * dt + wind.y * 2400 * dt + 1600 * dt; this.velocity.x *= .985; this.velocity.y *= .985; this.velocity.x = clamp(this.velocity.x, -1000, 1000); this.velocity.y = clamp(this.velocity.y, -1000, 1000); this.bear.x += this.velocity.x * dt; this.bear.y += this.velocity.y * dt; if (this.bear.y > 625) { this.bear.y = 625; this.velocity.y *= -.18; this.velocity.x *= .86; } this.bear.x = clamp(this.bear.x, 70, 930); if (this.day === 6) this.won = true; }
-  draw(c, time) { const shake = this.shock > 0 ? vector(Math.sin(time * 49) * 7, Math.sin(time * 67) * 5) : vector(0, 0); c.save(); c.translate(shake.x, shake.y); c.fillStyle = this.strike > 0 ? '#69798d' : '#a5d8e8'; c.fillRect(0, 0, W, H); c.fillStyle = '#67ae69'; c.fillRect(0, 560, W, 140); c.fillStyle = '#42875e'; c.beginPath(); c.arc(220, 610, 280, Math.PI, 7); c.arc(760, 640, 360, Math.PI, 7); c.fill(); c.fillStyle = '#fff'; c.font = '600 17px Space Grotesk'; c.textAlign = 'center'; c.fillText('KEEP THE BEAR MOVING', W / 2, 116); drawDays(c, this.day); if (this.shock > 0) { c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(0, 0, W, H); c.fillStyle = '#fff'; c.font = '700 28px Space Grotesk'; c.fillText('EARTHQUAKE!', W - 140, 116); } if (this.strike > 0) { c.strokeStyle = '#fff06a'; c.lineWidth = 12; c.shadowColor = '#fff'; c.shadowBlur = 22; c.beginPath(); c.moveTo(this.targetX, 75); c.lineTo(this.targetX - 35, 190); c.lineTo(this.targetX + 25, 300); c.lineTo(this.targetX - 20, 430); c.lineTo(this.targetX, 625); c.stroke(); c.shadowBlur = 0; } drawBear(c, this.bear, this.image); if (windDirection()) { drawWind(c, time); } c.restore(); c.fillStyle = '#17211d'; c.textAlign = 'left'; c.font = '500 16px DM Mono'; c.fillText(`DAY ${['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][this.day]}`, 25, 675); c.textAlign = 'right'; c.fillText('[WASD] WIND  •  [R] RESET', W - 22, 675); if (this.over || this.won) { c.fillStyle = 'rgba(18,22,31,.83)'; c.fillRect(0, 0, W, H); roundedRect(c, 250, 245, 500, 230, 18, this.won ? '#185b43' : '#281f2a', this.won ? '#8ff09a' : '#ff715b'); c.textAlign = 'center'; c.fillStyle = '#fff'; c.font = '700 57px Space Grotesk'; c.fillText(this.won ? 'YOU WIN!' : 'GAME OVER', 500, 325); c.font = '20px Space Grotesk'; c.fillText(this.won ? 'The bear reached Sunday.' : 'The bear was hit by lightning.', 500, 372); c.font = '500 14px DM Mono'; c.fillText('PRESS R OR USE RESET TO PLAY AGAIN', 500, 425); } }
+  update(dt, time) { if (this.over || this.won) return; this.elapsed += dt; this.day = Math.min(6, Math.floor(this.elapsed / 6)); this.nextStrike -= dt; if (this.nextStrike <= 0) { this.strike = 1.5; this.nextStrike = 3 + Math.random() * 3; this.targetX = 120 + Math.random() * 760; } if (this.strike > 0) { this.strike -= dt; if (this.strike < .35 && Math.abs(this.bear.x - this.targetX) < 90) this.over = true; } this.shockTimer -= dt; if (this.shockTimer <= 0 && this.shock <= 0) this.shock = 2.3; if (this.shock > 0) { this.shock -= dt; if (this.shock <= 0) this.shockTimer = 8 + Math.random() * 6; } const wind = vector((keys.a ? -1 : 0) + (keys.d ? 1 : 0), (keys.w ? -1 : 0) + (keys.s ? 1 : 0));
+      const danger = this.strike > 0 ? (this.targetX - this.bear.x) : 0;
+      this.velocity.x += (pointer.x - this.bear.x) * 10 * dt + wind.x * 2400 * dt + (Math.abs(danger) < 250 ? -Math.sign(danger) * 6000 * dt : 0);
+      this.velocity.y += (pointer.y - this.bear.y) * 10 * dt + wind.y * 2400 * dt + 1600 * dt;
+      this.velocity.x *= .985;
+      this.velocity.y *= .985;
+      this.velocity.x = clamp(this.velocity.x, -1000, 1000);
+      this.velocity.y = clamp(this.velocity.y, -1000, 1000);
+      this.bear.x += this.velocity.x * dt;
+      this.bear.y += this.velocity.y * dt;
+      if (this.bear.y > 625) { this.bear.y = 625; this.velocity.y *= -.18; this.velocity.x *= .86; }
+      this.bear.x = clamp(this.bear.x, 70, 930);
+      if (this.day === 6) this.won = true;
+    }
+    draw(c, time) { const shake = this.shock > 0 ? vector(Math.sin(time * 49) * 7, Math.sin(time * 67) * 5) : vector(0, 0); c.save(); c.translate(shake.x, shake.y); c.fillStyle = this.strike > 0 ? '#69798d' : '#a5d8e8'; c.fillRect(0, 0, W, H); c.fillStyle = '#67ae69'; c.fillRect(0, 560, W, 140); c.fillStyle = '#42875e'; c.beginPath(); c.arc(220, 610, 280, Math.PI, 7); c.arc(760, 640, 360, Math.PI, 7); c.fill(); c.fillStyle = '#fff'; c.font = '600 17px Space Grotesk'; c.textAlign = 'center'; c.fillText('KEEP THE BEAR MOVING', W / 2, 116); drawDays(c, this.day); if (this.shock > 0) { c.fillStyle = 'rgba(255,255,255,.18)'; c.fillRect(0, 0, W, H); c.fillStyle = '#fff'; c.font = '700 28px Space Grotesk'; c.fillText('EARTHQUAKE!', W - 140, 116); } if (this.strike > 0) { c.strokeStyle = '#fff06a'; c.lineWidth = 12; c.shadowColor = '#fff'; c.shadowBlur = 22; c.beginPath(); c.moveTo(this.targetX, 75); c.lineTo(this.targetX - 35, 190); c.lineTo(this.targetX + 25, 300); c.lineTo(this.targetX - 20, 430); c.lineTo(this.targetX, 625); c.stroke(); c.shadowBlur = 0; } drawBear(c, this.bear, this.image); if (windDirection()) { drawWind(c, time); } c.restore(); c.fillStyle = '#17211d'; c.textAlign = 'left'; c.font = '500 16px DM Mono'; c.fillText(`DAY ${['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'][this.day]}`, 25, 675); c.textAlign = 'right'; c.fillText('[WASD] WIND  •  [R] RESET', W - 22, 675); if (this.over || this.won) { c.fillStyle = 'rgba(18,22,31,.83)'; c.fillRect(0, 0, W, H); roundedRect(c, 250, 245, 500, 230, 18, this.won ? '#185b43' : '#281f2a', this.won ? '#8ff09a' : '#ff715b'); c.textAlign = 'center'; c.fillStyle = '#fff'; c.font = '700 57px Space Grotesk'; c.fillText(this.won ? 'YOU WIN!' : 'GAME OVER', 500, 325); c.font = '20px Space Grotesk'; c.fillText(this.won ? 'The bear reached Sunday.' : 'The bear was hit by lightning.', 500, 372); c.font = '500 14px DM Mono'; c.fillText('PRESS R OR USE RESET TO PLAY AGAIN', 500, 425); } }
 }
 
 function windDirection() { return (keys.w || keys.a || keys.s || keys.d) ? vector((keys.a ? -1 : 0) + (keys.d ? 1 : 0), (keys.w ? -1 : 0) + (keys.s ? 1 : 0)) : null; }
@@ -488,3 +525,321 @@ function drawWind(c, time) { const wind = windDirection(); c.save(); c.strokeSty
 
 function drawDays(c, active) { const days = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']; roundedRect(c, 20, 18, 960, 59, 12, 'rgba(25,35,55,.78)'); days.forEach((day, index) => { const x = 31 + index * 135; roundedRect(c, x, 26, 126, 43, 8, index === active ? '#ffe04e' : '#eff3f5'); c.fillStyle = index === active ? '#17211d' : '#34414b'; c.font = '700 16px Space Grotesk'; c.textAlign = 'center'; c.fillText(day, x + 63, 53); if (index === 4 && index === active) { c.fillStyle = '#8f5c00'; c.font = '10px DM Mono'; c.fillText('THUNDER', x + 63, 65); } }); }
 function drawBear(c, point, image) { if (image.complete && image.naturalWidth) { c.drawImage(image, point.x - 82, point.y - 112, 165, 165); return; } c.fillStyle = '#6d4738'; c.beginPath(); c.arc(point.x, point.y, 62, 0, 7); c.fill(); c.fillStyle = '#f8d5a4'; c.beginPath(); c.arc(point.x, point.y + 8, 40, 0, 7); c.fill(); c.fillStyle = '#17211d'; c.beginPath(); c.arc(point.x - 20, point.y - 10, 6, 0, 7); c.arc(point.x + 20, point.y - 10, 6, 0, 7); c.fill(); }
+
+class RainbowLoomGame {
+  constructor() {
+    this.colors = ['#ff5d8f', '#ffb84d', '#f8e66a', '#57d8b2', '#62a9ff', '#b78cff'];
+    this.colorNames = ['PINK', 'TANGERINE', 'LEMON', 'MINT', 'SKY', 'VIOLET'];
+    this.patternPairs = [[0, 1], [1, 8], [8, 9], [9, 16], [16, 17], [17, 10], [10, 11], [11, 4]];
+    this.reset();
+  }
+  reset() { this.bands = []; this.dragStart = null; this.particles = []; this.level = 1; this.best = 0; this.message = 'WEAVE THE SHOWN PATTERN'; this.selectedColor = 0; this.freePlay = false; this.makePattern(); }
+  makePattern() { this.pattern = this.patternPairs.map((pair, index) => ({ a: pair[0], b: pair[1], color: (index + this.level - 1) % this.colors.length })); this.bands = []; this.message = 'WEAVE THE SHOWN PATTERN'; }
+  peg(index) { return { x: 110 + (index % 7) * 88, y: 220 + Math.floor(index / 7) * 140 }; }
+  pegAt(x, y) { for (let index = 0; index < 21; index++) if (distance({ x, y }, this.peg(index)) < 30) return index; return -1; }
+  pointerDown() {
+    for (let index = 0; index < this.colors.length; index++) {
+      const x = 755 + index % 3 * 68, y = 458 + Math.floor(index / 3) * 48;
+      if (distance(pointer, { x, y }) < 22) { this.selectedColor = index; return; }
+    }
+    if (pointer.x > 735 && pointer.y > 515 && pointer.y < 570) {
+      if (pointer.x < 850) { this.freePlay = !this.freePlay; this.message = this.freePlay ? 'FREE WEAVE: MAKE YOUR OWN DESIGN' : 'WEAVE THE SHOWN PATTERN'; }
+      else this.undo();
+      return;
+    }
+    if (pointer.x > 735 && pointer.y >= 575 && pointer.y <= 635) { this.clearBands(); return; }
+    const peg = this.pegAt(pointer.x, pointer.y);
+    if (peg !== -1) this.dragStart = peg;
+  }
+  pointerUp() {
+    if (this.dragStart === null) return;
+    const end = this.pegAt(pointer.x, pointer.y), start = this.dragStart; this.dragStart = null;
+    if (end === -1 || end === start) return;
+    if (this.freePlay) { this.addBand(start, end, this.selectedColor); this.message = 'NICE LOOP! PICK A COLOR AND KEEP WEAVING'; return; }
+    const next = this.pattern[this.bands.length]; if (!next) return;
+    const matches = (start === next.a && end === next.b) || (start === next.b && end === next.a);
+    if (!matches || this.selectedColor !== next.color) { this.message = !matches ? 'TRY THE NEXT PAIR OF PEGS IN THE PATTERN' : `NEXT BAND IS ${this.colorNames[next.color]}`; return; }
+    this.addBand(start, end, this.selectedColor);
+    this.message = this.bands.length === this.pattern.length ? 'BRACELET COMPLETE! BEAUTIFUL WEAVING!' : 'PERFECT MATCH! KEEP THE RHYTHM';
+    if (this.bands.length === this.pattern.length) { this.best = Math.max(this.best, this.level); this.burst(640, 370); this.level++; setTimeout(() => { if (activeGame === this) this.makePattern(); }, 1100); }
+  }
+  addBand(a, b, color) { this.bands.push({ a, b, color }); }
+  undo() { if (this.bands.length) this.bands.pop(); this.message = 'LAST BAND UNDONE'; }
+  clearBands() { this.bands = []; this.message = this.freePlay ? 'BOARD CLEARED — START A NEW DESIGN' : 'PATTERN RESET — TRY AGAIN'; }
+  burst(x, y) { for (let i = 0; i < 48; i++) { const angle = Math.random() * Math.PI * 2, speed = 60 + Math.random() * 220; this.particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1, color: this.colors[i % this.colors.length] }); } }
+  update(dt) { this.particles = this.particles.filter(p => { p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 100 * dt; return p.life > 0; }); }
+  drawBand(c, band, alpha = 1) {
+    const a = this.peg(band.a), b = this.peg(band.b), dx = b.x - a.x, dy = b.y - a.y, length = Math.max(1, Math.hypot(dx, dy));
+    c.save(); c.globalAlpha = alpha; c.strokeStyle = this.colors[band.color]; c.lineWidth = 13; c.lineCap = 'round'; c.shadowColor = this.colors[band.color]; c.shadowBlur = 13;
+    c.beginPath(); c.moveTo(a.x, a.y); c.quadraticCurveTo((a.x + b.x) / 2 - dy / length * 18, (a.y + b.y) / 2 + dx / length * 18, b.x, b.y); c.stroke();
+    c.shadowBlur = 0; c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,.45)'; c.beginPath(); c.moveTo(a.x, a.y - 2); c.quadraticCurveTo((a.x + b.x) / 2 - dy / length * 18, (a.y + b.y) / 2 + dx / length * 18 - 2, b.x, b.y - 2); c.stroke(); c.restore();
+  }
+  draw(c, time) {
+    c.fillStyle = '#17233b'; c.fillRect(0, 0, W, H);
+    for (let i = 0; i < 45; i++) { c.fillStyle = `rgba(255,255,255,${.12 + (i % 3) * .06})`; c.beginPath(); c.arc((i * 193) % W, (i * 97) % H, 1 + i % 2, 0, Math.PI * 2); c.fill(); }
+    c.textAlign = 'left'; c.fillStyle = '#fff2cf'; c.font = '700 34px Space Grotesk'; c.fillText('RAINBOW LOOM LAB', 34, 52); c.fillStyle = '#a8c7e8'; c.font = '14px DM Mono'; c.fillText('STRETCH • LOOP • CREATE', 37, 78); c.fillStyle = '#f9d46b'; c.font = '600 16px DM Mono'; c.fillText(`LEVEL ${String(this.level).padStart(2, '0')}   BEST ${String(this.best).padStart(2, '0')}`, 34, 112);
+    roundedRect(c, 54, 155, 625, 435, 25, '#243450', '#405577'); c.strokeStyle = 'rgba(194,220,255,.12)'; c.lineWidth = 1;
+    for (let row = 0; row < 3; row++) { c.beginPath(); c.moveTo(110, 220 + row * 140); c.lineTo(638, 220 + row * 140); c.stroke(); }
+    for (const band of this.bands) this.drawBand(c, band);
+    if (this.dragStart !== null && pointer.down) { const end = this.pegAt(pointer.x, pointer.y); if (end !== -1 && end !== this.dragStart) this.drawBand(c, { a: this.dragStart, b: end, color: this.selectedColor }, .65); }
+    for (let i = 0; i < 21; i++) { const p = this.peg(i); c.fillStyle = '#101a2a'; c.beginPath(); c.arc(p.x, p.y, 20, 0, Math.PI * 2); c.fill(); c.fillStyle = '#b6c8dc'; c.beginPath(); c.arc(p.x, p.y, 11, 0, Math.PI * 2); c.fill(); c.fillStyle = '#72869e'; c.beginPath(); c.arc(p.x - 3, p.y - 4, 3, 0, Math.PI * 2); c.fill(); if (this.dragStart === i) { c.strokeStyle = '#fff2cf'; c.lineWidth = 3; c.beginPath(); c.arc(p.x, p.y, 27 + Math.sin(time * 9) * 2, 0, Math.PI * 2); c.stroke(); } }
+    roundedRect(c, 710, 145, 260, 465, 20, '#f8f3e8', '#fff'); c.fillStyle = '#17233b'; c.font = '700 21px Space Grotesk'; c.fillText(this.freePlay ? 'FREE WEAVE' : 'PATTERN CARD', 735, 183); c.fillStyle = '#778291'; c.font = '12px DM Mono'; c.fillText(this.freePlay ? 'YOUR COLORS, YOUR DESIGN' : `COPY THE ORDER • ${this.bands.length}/${this.pattern.length}`, 736, 205);
+    if (!this.freePlay) this.pattern.forEach((band, index) => { const y = 242 + index * 34, done = index < this.bands.length, current = index === this.bands.length; c.strokeStyle = done ? '#75c9a7' : '#d8dce2'; c.lineWidth = 6; c.beginPath(); c.moveTo(755, y); c.lineTo(800, y); c.stroke(); c.fillStyle = this.colors[band.color]; c.beginPath(); c.arc(777, y, 7, 0, Math.PI * 2); c.fill(); c.fillStyle = current ? '#17233b' : '#818b97'; c.font = `${current ? '700' : '500'} 12px DM Mono`; c.fillText(`${String(index + 1).padStart(2, '0')}  PEG ${band.a + 1} → ${band.b + 1}`, 818, y + 4); if (done) { c.fillStyle = '#3a9c78'; c.font = '700 14px Space Grotesk'; c.fillText('✓', 940, y + 5); } });
+    c.fillStyle = '#17233b'; c.font = '700 13px DM Mono'; c.fillText('CHOOSE A BAND COLOR', 735, 426);
+    this.colors.forEach((color, index) => { const x = 755 + index % 3 * 68, y = 458 + Math.floor(index / 3) * 48; c.fillStyle = color; c.beginPath(); c.arc(x, y, 15, 0, Math.PI * 2); c.fill(); if (index === this.selectedColor) { c.strokeStyle = '#17233b'; c.lineWidth = 3; c.beginPath(); c.arc(x, y, 21, 0, Math.PI * 2); c.stroke(); } });
+    roundedRect(c, 735, 532, 112, 38, 7, this.freePlay ? '#c8f2dd' : '#e4e9f3', '#cfd5df'); c.fillStyle = '#17233b'; c.font = '600 11px DM Mono'; c.textAlign = 'center'; c.fillText(this.freePlay ? '★ FREE ON' : 'FREE WEAVE', 791, 556); roundedRect(c, 858, 532, 88, 38, 7, '#fff', '#cfd5df'); c.fillStyle = '#17233b'; c.fillText('↶ UNDO', 902, 556); roundedRect(c, 735, 578, 211, 38, 7, '#17233b', '#17233b'); c.fillStyle = '#fff2cf'; c.fillText('CLEAR BOARD', 840, 602);
+    c.textAlign = 'left'; c.fillStyle = '#fff2cf'; c.font = '500 14px DM Mono'; c.fillText(this.message, 57, 643); c.textAlign = 'right'; c.fillStyle = '#a8c7e8'; c.font = '12px DM Mono'; c.fillText('[R] RESET  •  [ESC] MENU', W - 25, 677);
+    this.particles.forEach(p => { c.globalAlpha = p.life; c.fillStyle = p.color; c.beginPath(); c.arc(p.x, p.y, 3 + p.life * 4, 0, Math.PI * 2); c.fill(); }); c.globalAlpha = 1;
+  }
+}
+
+class AmazonCartGame {
+  constructor() {
+    this.products = [
+      { name: 'Pocket Speaker', category: 'tech', price: 24, icon: '♫', color: '#7b9cff' },
+      { name: 'Cloud Pillow', category: 'home', price: 18, icon: '☁', color: '#9edbd0' },
+      { name: 'Desk Plant', category: 'home', price: 12, icon: '✿', color: '#86bd83' },
+      { name: 'Pixel Camera', category: 'tech', price: 35, icon: '▣', color: '#f6bd60' },
+      { name: 'Cozy Socks', category: 'fun', price: 9, icon: '≋', color: '#f28c9b' },
+      { name: 'Mystery Mug', category: 'fun', price: 16, icon: '☕', color: '#c1a3df' }
+    ];
+      this.records = this.loadRecords();
+      try { this.lastPlayerName = localStorage.getItem('amazon-cart-player-name') || ''; } catch { this.lastPlayerName = ''; }
+      this.boardSort = 'score';
+    this.reset();
+  }
+  reset() {
+    this.cart = Array(this.products.length).fill(0);
+    this.wishlist = new Set();
+    this.category = 'all';
+    this.coupon = false;
+    this.timeLeft = 45;
+    this.elapsed = 0;
+    this.score = 0;
+    this.message = 'BUILD A SMART CART • YOUR BUDGET IS $120';
+    this.finished = false;
+    this.receipt = null;
+    this.pendingRecord = null;
+    this.nameDraft = this.lastPlayerName;
+    this.nameEntry = false;
+    this.leaderboardOpen = false;
+    this.dealIndex = Math.floor(Math.random() * this.products.length);
+  }
+  loadRecords() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('amazon-cart-leaderboard') || '[]');
+      if (Array.isArray(saved)) return saved.filter(record => record && typeof record.name === 'string' && Number.isFinite(record.seconds) && Number.isFinite(record.score)).slice(0, 50);
+    } catch {}
+    return [];
+  }
+  saveRecords() {
+    try { localStorage.setItem('amazon-cart-leaderboard', JSON.stringify(this.records)); } catch { this.message = 'COULD NOT SAVE LOCALLY — STORAGE MAY BE FULL'; }
+  }
+  handleKey(event) {
+    if (this.nameEntry) {
+      if (event.key === 'Enter') this.saveRecord();
+      else if (event.key === 'Backspace') this.nameDraft = this.nameDraft.slice(0, -1);
+      else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey && this.nameDraft.length < 16) this.nameDraft += event.key;
+      return true;
+    }
+    if (this.leaderboardOpen) {
+      if (event.key.toLowerCase() === 'l') this.leaderboardOpen = false;
+      return true;
+    }
+    if (event.key.toLowerCase() === 'l') { this.leaderboardOpen = true; return true; }
+    return false;
+  }
+  saveRecord() {
+    if (!this.pendingRecord) return;
+    const name = this.nameDraft.trim().slice(0, 16) || 'SHOPPER';
+    const record = { ...this.pendingRecord, name, date: Date.now() };
+    this.records.unshift(record);
+    this.records = this.records.slice(0, 50);
+    this.lastPlayerName = name;
+    try { localStorage.setItem('amazon-cart-player-name', name); } catch {}
+    this.saveRecords();
+    this.nameEntry = false;
+    this.leaderboardOpen = true;
+  }
+  startRecordEntry() {
+    const count = this.cart.reduce((sum, quantity) => sum + quantity, 0);
+    const savings = this.subtotal() - this.total();
+    const score = Math.round(this.total() + savings * 2 + Math.ceil(this.timeLeft) * 2 + count * 15);
+    this.score = score;
+    this.pendingRecord = { seconds: Math.round(this.elapsed), score, count, savings, total: this.total() };
+    this.nameDraft = this.lastPlayerName;
+    this.nameEntry = true;
+    this.finished = true;
+  }
+  subtotal() { return this.cart.reduce((sum, quantity, index) => sum + quantity * this.products[index].price, 0); }
+  dealSavings() { return this.cart[this.dealIndex] * this.products[this.dealIndex].price * .25; }
+  total() { const afterDeal = this.subtotal() - this.dealSavings(); return Math.max(0, afterDeal - (this.coupon ? afterDeal * .15 : 0)); }
+  visibleProducts() { return this.products.map((product, index) => ({ product, index })).filter(({ product }) => this.category === 'all' || product.category === this.category); }
+  pointerDown() {
+    if (this.nameEntry) {
+      if (pointer.x >= 390 && pointer.x <= 610 && pointer.y >= 458 && pointer.y <= 510) this.saveRecord();
+      return;
+    }
+    if (this.leaderboardOpen) {
+      if (pointer.x >= 714 && pointer.x <= 850 && pointer.y >= 574 && pointer.y <= 615) this.leaderboardOpen = false;
+      else if (pointer.y >= 170 && pointer.y <= 210) {
+        if (pointer.x >= 185 && pointer.x <= 425) this.boardSort = 'score';
+        if (pointer.x >= 445 && pointer.x <= 685) this.boardSort = 'seconds';
+      }
+      return;
+    }
+    if (this.finished) {
+      if (pointer.y >= 458 && pointer.y <= 510) {
+        if (pointer.x >= 280 && pointer.x <= 495) this.leaderboardOpen = true;
+        else if (pointer.x >= 505 && pointer.x <= 720) this.reset();
+      }
+      return;
+    }
+    if (pointer.x >= 625 && pointer.x <= 805 && pointer.y >= 19 && pointer.y <= 69) { this.leaderboardOpen = true; return; }
+    const categories = ['all', 'home', 'tech', 'fun'];
+    for (let index = 0; index < categories.length; index++) {
+      const x = 30 + index * 93;
+      if (pointer.x >= x && pointer.x <= x + 82 && pointer.y >= 112 && pointer.y <= 145) { this.category = categories[index]; return; }
+    }
+    for (const { index } of this.visibleProducts()) {
+      const position = this.productPosition(index);
+      if (pointer.x >= position.x && pointer.x <= position.x + position.w && pointer.y >= position.y && pointer.y <= position.y + position.h) {
+        if (pointer.x > position.x + position.w - 43 && pointer.y < position.y + 52) {
+          this.wishlist.has(index) ? this.wishlist.delete(index) : this.wishlist.add(index);
+          this.message = this.wishlist.has(index) ? `${this.products[index].name.toUpperCase()} SAVED TO YOUR WISHLIST` : 'REMOVED FROM YOUR WISHLIST';
+          return;
+        }
+        this.add(index);
+        return;
+      }
+    }
+    if (pointer.x >= 714 && pointer.x <= 958 && pointer.y >= 188 && pointer.y <= 316) {
+      const row = Math.round((pointer.y - 205) / 29);
+      const items = this.cart.map((quantity, index) => ({ quantity, index })).filter(item => item.quantity > 0);
+      const item = items[row];
+      if (item) {
+        if (pointer.x > 911) this.add(item.index);
+        else if (pointer.x > 875) this.cart[item.index] = Math.max(0, this.cart[item.index] - 1);
+        else this.cart[item.index] = 0;
+      }
+      return;
+    }
+    if (pointer.x >= 715 && pointer.x <= 954 && pointer.y >= 410 && pointer.y <= 447) {
+      this.coupon = !this.coupon;
+      this.message = this.coupon ? 'NICE! A-Z15 COUPON APPLIED — 15% OFF' : 'COUPON REMOVED';
+      return;
+    }
+    if (pointer.x >= 715 && pointer.x <= 954 && pointer.y >= 548 && pointer.y <= 601) this.checkout();
+  }
+  productPosition(index) {
+    const visible = this.visibleProducts().findIndex(item => item.index === index);
+    const col = visible % 3, row = Math.floor(visible / 3);
+    return { x: 30 + col * 207, y: 169 + row * 221, w: 190, h: 202 };
+  }
+  add(index) {
+    const nextCart = [...this.cart]; nextCart[index]++;
+    const nextSubtotal = nextCart.reduce((sum, quantity, itemIndex) => sum + quantity * this.products[itemIndex].price, 0);
+    const nextDeal = nextCart[this.dealIndex] * this.products[this.dealIndex].price * .25;
+    const discounted = nextSubtotal - nextDeal;
+    if (discounted - (this.coupon ? discounted * .15 : 0) > 120) { this.message = 'BUDGET ALERT! REMOVE AN ITEM OR APPLY YOUR COUPON'; return; }
+    this.cart = nextCart;
+    this.message = index === this.dealIndex ? 'LIGHTNING DEAL! THIS ITEM IS 25% OFF' : `${this.products[index].name.toUpperCase()} ADDED TO YOUR CART`;
+  }
+  checkout() {
+    const count = this.cart.reduce((sum, quantity) => sum + quantity, 0);
+    if (!count) { this.message = 'YOUR CART IS EMPTY — PICK A FEW TREATS FIRST'; return; }
+    const savings = this.subtotal() - this.total();
+    this.receipt = { count, savings, total: this.total() };
+    this.startRecordEntry();
+  }
+  update(dt) {
+    if (this.finished) return;
+    this.elapsed += dt;
+    this.timeLeft = Math.max(0, this.timeLeft - dt);
+    if (this.timeLeft === 0) { this.message = 'DEAL DASH OVER! SAVE YOUR SHOPPING TIME'; this.startRecordEntry(); }
+  }
+  draw(c, time) {
+    c.fillStyle = '#eef3f7'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#172b3a'; c.fillRect(0, 0, W, 88);
+    c.fillStyle = '#fff'; c.font = '700 30px Space Grotesk'; c.textAlign = 'left'; c.fillText('a→z', 29, 43);
+    c.fillStyle = '#b9e8ff'; c.font = '500 12px DM Mono'; c.fillText('PRETEND MARKET', 31, 64);
+    roundedRect(c, 150, 20, 460, 44, 8, '#fff', '#d6e2e9'); c.fillStyle = '#84939d'; c.font = '15px Space Grotesk'; c.fillText('Search the pretend store...', 168, 47);
+    roundedRect(c, 625, 22, 180, 42, 7, '#24475a', '#527186'); c.fillStyle = '#fff2bf'; c.font = '600 11px DM Mono'; c.textAlign = 'center'; c.fillText(`🏆  TOP SHOPPERS  ${this.records.length ? `· ${this.records.length}` : ''}`, 715, 48);
+    c.fillStyle = '#fff'; c.font = '500 13px DM Mono'; c.textAlign = 'right'; c.fillText(`DEAL DASH  ${Math.ceil(this.timeLeft)}s`, 958, 35); c.fillStyle = '#f7c85d'; c.fillText('BUDGET  $120', 958, 60);
+    const categories = [['all', 'ALL'], ['home', 'HOME'], ['tech', 'TECH'], ['fun', 'FUN']];
+    categories.forEach(([key, label], index) => { const x = 30 + index * 93; roundedRect(c, x, 112, 82, 33, 7, this.category === key ? '#172b3a' : '#fff', '#d5dfe5'); c.fillStyle = this.category === key ? '#fff' : '#52616b'; c.font = '600 11px DM Mono'; c.textAlign = 'center'; c.fillText(label, x + 41, 133); });
+    const products = this.visibleProducts();
+    products.forEach(({ product, index }) => {
+      const box = this.productPosition(index), hovered = pointer.x >= box.x && pointer.x <= box.x + box.w && pointer.y >= box.y && pointer.y <= box.y + box.h;
+      roundedRect(c, box.x, box.y, box.w, box.h, 11, hovered ? '#fff' : '#fbfdff', '#dce5e9');
+      roundedRect(c, box.x + 10, box.y + 10, box.w - 20, 91, 8, product.color);
+      c.fillStyle = 'rgba(255,255,255,.22)'; c.beginPath(); c.arc(box.x + 145, box.y + 55, 36, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#fff'; c.font = '54px Space Grotesk'; c.textAlign = 'center'; c.fillText(product.icon, box.x + 95, box.y + 73);
+      if (index === this.dealIndex) { roundedRect(c, box.x + 16, box.y + 17, 83, 23, 5, '#ffdf79'); c.fillStyle = '#533d10'; c.font = '700 10px DM Mono'; c.fillText('⚡ 25% DEAL', box.x + 57, box.y + 33); }
+      c.textAlign = 'left'; c.fillStyle = '#243540'; c.font = '600 16px Space Grotesk'; c.fillText(product.name, box.x + 14, box.y + 126);
+      c.fillStyle = '#64747c'; c.font = '12px DM Mono'; c.fillText(product.category.toUpperCase(), box.x + 14, box.y + 147);
+      c.fillStyle = '#243540'; c.font = '700 17px Space Grotesk'; c.fillText(`$${product.price.toFixed(2)}`, box.x + 14, box.y + 180);
+      roundedRect(c, box.x + 105, box.y + 157, 72, 31, 6, '#ffd814', '#f0c400'); c.fillStyle = '#172b3a'; c.font = '700 10px DM Mono'; c.textAlign = 'center'; c.fillText(this.cart[index] ? `ADD +${this.cart[index]}` : 'ADD +', box.x + 141, box.y + 177);
+      c.fillStyle = this.wishlist.has(index) ? '#e85b68' : '#fff'; c.strokeStyle = '#b8c5cc'; c.lineWidth = 1.5; c.beginPath(); c.arc(box.x + box.w - 24, box.y + 27, 13, 0, Math.PI * 2); c.fill(); c.stroke(); c.fillStyle = this.wishlist.has(index) ? '#e85b68' : '#52616b'; c.font = '15px Space Grotesk'; c.fillText(this.wishlist.has(index) ? '♥' : '♡', box.x + box.w - 24, box.y + 32);
+    });
+    roundedRect(c, 682, 108, 286, 508, 13, '#fff', '#dce5e9');
+    c.textAlign = 'left'; c.fillStyle = '#243540'; c.font = '700 21px Space Grotesk'; c.fillText('Your cart', 704, 143);
+    const itemCount = this.cart.reduce((sum, quantity) => sum + quantity, 0);
+    c.fillStyle = '#788890'; c.font = '12px DM Mono'; c.fillText(`${itemCount} ${itemCount === 1 ? 'ITEM' : 'ITEMS'} • ${this.wishlist.size} WISHLISTED`, 705, 164);
+    c.strokeStyle = '#e7edf0'; c.beginPath(); c.moveTo(702, 179); c.lineTo(948, 179); c.stroke();
+    const cartItems = this.cart.map((quantity, index) => ({ quantity, index })).filter(item => item.quantity > 0);
+    if (!cartItems.length) { c.textAlign = 'center'; c.fillStyle = '#9aa7ac'; c.font = '14px Space Grotesk'; c.fillText('Your cart is taking a nap.', 825, 237); c.font = '27px Space Grotesk'; c.fillText('🛒', 825, 278); }
+    cartItems.slice(0, 4).forEach(({ quantity, index }, row) => { const y = 205 + row * 29; c.textAlign = 'left'; c.fillStyle = '#3c4d56'; c.font = '12px Space Grotesk'; c.fillText(`${this.products[index].name}  ×${quantity}`, 706, y); c.textAlign = 'right'; c.fillStyle = '#75848a'; c.font = '11px DM Mono'; c.fillText('−', 895, y); c.fillText('+', 935, y); c.fillStyle = '#30434c'; c.fillText(`$${(this.products[index].price * quantity).toFixed(0)}`, 872, y); });
+    c.strokeStyle = '#e7edf0'; c.beginPath(); c.moveTo(702, 327); c.lineTo(948, 327); c.stroke();
+    c.textAlign = 'left'; c.fillStyle = '#728087'; c.font = '12px DM Mono'; c.fillText('SUBTOTAL', 706, 350); c.textAlign = 'right'; c.fillStyle = '#30434c'; c.fillText(`$${this.subtotal().toFixed(2)}`, 944, 350);
+    c.textAlign = 'left'; c.fillStyle = '#2a9a76'; c.fillText('DEAL SAVINGS', 706, 373); c.textAlign = 'right'; c.fillText(`−$${this.dealSavings().toFixed(2)}`, 944, 373);
+    roundedRect(c, 704, 394, 242, 38, 6, this.coupon ? '#dff4e9' : '#f4f7f8', '#dce5e9'); c.textAlign = 'left'; c.fillStyle = this.coupon ? '#23805f' : '#53646d'; c.font = '600 11px DM Mono'; c.fillText(this.coupon ? '✓  COUPON APPLIED' : '＋  A-Z15 COUPON', 717, 418); c.textAlign = 'right'; c.fillStyle = '#75848a'; c.font = '11px DM Mono'; c.fillText(this.coupon ? '−15%' : 'TAP TO SAVE', 933, 418);
+    c.textAlign = 'left'; c.fillStyle = '#243540'; c.font = '600 14px Space Grotesk'; c.fillText('ESTIMATED TOTAL', 706, 473); c.textAlign = 'right'; c.font = '700 20px Space Grotesk'; c.fillText(`$${this.total().toFixed(2)}`, 944, 474);
+    c.textAlign = 'left'; c.fillStyle = '#87959b'; c.font = '11px DM Mono'; c.fillText(`YOU SAVE $${(this.subtotal() - this.total()).toFixed(2)}`, 706, 496);
+    roundedRect(c, 704, 548, 242, 48, 7, '#ffd814', '#f0c400'); c.fillStyle = '#172b3a'; c.textAlign = 'center'; c.font = '700 13px DM Mono'; c.fillText('CHECK OUT  →', 825, 578);
+    c.textAlign = 'left'; c.fillStyle = '#566771'; c.font = '12px DM Mono'; c.fillText(this.message, 30, 637);
+    c.textAlign = 'right'; c.fillStyle = '#829098'; c.font = '11px DM Mono'; c.fillText('[R] RESET  •  [L] LEADERBOARD', 958, 676);
+    if (this.nameEntry) this.drawNameEntry(c);
+    else if (this.leaderboardOpen) this.drawLeaderboard(c);
+    else if (this.finished) this.drawFinished(c);
+  }
+  drawNameEntry(c) {
+    c.fillStyle = 'rgba(15,31,43,.78)'; c.fillRect(0, 0, W, H); roundedRect(c, 285, 178, 430, 350, 18, '#fffdf8', '#ffd814');
+    c.textAlign = 'center'; c.fillStyle = '#172b3a'; c.font = '700 34px Space Grotesk'; c.fillText(this.receipt ? 'NICE HAUL!' : 'DEAL DASH COMPLETE', W / 2, 238);
+    c.fillStyle = '#62727a'; c.font = '15px Space Grotesk'; c.fillText(`You shopped for ${this.pendingRecord.seconds} seconds`, W / 2, 276);
+    c.fillStyle = '#268765'; c.font = '600 14px Space Grotesk'; c.fillText(`${this.pendingRecord.count} items  •  $${this.pendingRecord.savings.toFixed(2)} saved  •  ${this.pendingRecord.score} points`, W / 2, 307);
+    c.textAlign = 'left'; c.fillStyle = '#718087'; c.font = '11px DM Mono'; c.fillText('TYPE YOUR SHOPPER NAME', 330, 355);
+    roundedRect(c, 325, 371, 350, 54, 8, '#f2f6f7', '#cad7dc'); c.textAlign = 'center'; c.fillStyle = this.nameDraft ? '#203540' : '#9ba9ae'; c.font = '600 22px Space Grotesk'; c.fillText(this.nameDraft || 'SHOPPER', W / 2, 406);
+    c.fillStyle = '#95a2a7'; c.font = '11px DM Mono'; c.fillText('UP TO 16 CHARACTERS  •  ENTER TO SAVE', W / 2, 446);
+    roundedRect(c, 390, 458, 220, 52, 8, '#ffd814', '#f0c400'); c.fillStyle = '#172b3a'; c.font = '700 13px DM Mono'; c.fillText('SAVE MY SCORE', W / 2, 490);
+  }
+  drawLeaderboard(c) {
+    c.fillStyle = 'rgba(13,28,39,.84)'; c.fillRect(0, 0, W, H); roundedRect(c, 130, 60, 740, 575, 18, '#f7fafb', '#ffd65a');
+    c.textAlign = 'left'; c.fillStyle = '#193546'; c.font = '700 34px Space Grotesk'; c.fillText('TOP SHOPPERS', 170, 111);
+    const totalSeconds = this.records.reduce((sum, record) => sum + record.seconds, 0);
+    const totalTime = `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`;
+    c.fillStyle = '#74848c'; c.font = '12px DM Mono'; c.fillText(`${this.records.length} SAVED RUNS  •  ${totalTime} TOTAL SHOP TIME  •  THIS DEVICE`, 172, 139);
+    roundedRect(c, 180, 161, 240, 38, 7, this.boardSort === 'score' ? '#193546' : '#e7eef1', '#d2dde1'); c.fillStyle = this.boardSort === 'score' ? '#fff' : '#566871'; c.textAlign = 'center'; c.font = '600 11px DM Mono'; c.fillText('★  CART POINTS', 300, 185);
+    roundedRect(c, 435, 161, 240, 38, 7, this.boardSort === 'seconds' ? '#193546' : '#e7eef1', '#d2dde1'); c.fillStyle = this.boardSort === 'seconds' ? '#fff' : '#566871'; c.fillText('◷  SHOP TIME', 555, 185);
+    c.textAlign = 'left'; c.fillStyle = '#98a5aa'; c.font = '10px DM Mono'; c.fillText('RANK', 176, 226); c.fillText('SHOPPER', 235, 226); c.fillText('CART SCORE', 570, 226); c.fillText('TIME SHOPPED', 712, 226);
+    const sorted = [...this.records].sort((a, b) => this.boardSort === 'score' ? b.score - a.score || b.seconds - a.seconds : b.seconds - a.seconds || b.score - a.score).slice(0, 7);
+    if (!sorted.length) { c.textAlign = 'center'; c.fillStyle = '#62747d'; c.font = '18px Space Grotesk'; c.fillText('No runs saved yet. Make the first great haul!', W / 2, 360); c.font = '38px Space Grotesk'; c.fillText('🛍️', W / 2, 315); }
+    sorted.forEach((record, index) => {
+      const y = 239 + index * 45; roundedRect(c, 165, y, 670, 39, 7, index === 0 ? '#fff4cc' : index % 2 ? '#edf3f5' : '#f2f6f7');
+      c.textAlign = 'center'; c.fillStyle = index === 0 ? '#a67615' : '#89979d'; c.font = '700 16px Space Grotesk'; c.fillText(['♛', '②', '③'][index] || String(index + 1).padStart(2, '0'), 195, y + 25);
+      c.textAlign = 'left'; c.fillStyle = '#263e49'; c.font = `${index === 0 ? '700' : '600'} 15px Space Grotesk`; c.fillText(record.name.slice(0, 16), 235, y + 18);
+      c.fillStyle = '#829098'; c.font = '10px DM Mono'; c.fillText(`${record.count} ITEMS  ·  ${new Date(record.date || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric' }).toUpperCase()}`, 235, y + 32);
+      c.textAlign = 'right'; c.fillStyle = '#233a46'; c.font = '700 15px DM Mono'; c.fillText(`${record.score}`, 642, y + 25); c.fillStyle = '#268765'; c.fillText(`${record.seconds}s`, 806, y + 25);
+    });
+    c.textAlign = 'left'; c.fillStyle = '#8a999f'; c.font = '10px DM Mono'; c.fillText('SHOP AGAIN TO ADD ANOTHER RUN  •  SCORES ARE STORED LOCALLY', 170, 612);
+    roundedRect(c, 714, 585, 136, 34, 6, '#193546', '#193546'); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '600 10px DM Mono'; c.fillText('BACK TO STORE', 782, 607);
+  }
+  drawFinished(c) {
+    c.fillStyle = 'rgba(15,31,43,.76)'; c.fillRect(0, 0, W, H); roundedRect(c, 265, 180, 470, 340, 18, '#fffdf8', '#ffd814');
+    c.textAlign = 'center'; c.fillStyle = '#172b3a'; c.font = '700 37px Space Grotesk'; c.fillText(this.receipt ? 'ORDER PLACED!' : 'DEAL DASH ENDED', W / 2, 242);
+    if (this.receipt) { c.fillStyle = '#52636c'; c.font = '16px Space Grotesk'; c.fillText(`${this.receipt.count} goodies • Total $${this.receipt.total.toFixed(2)}`, W / 2, 292); c.fillStyle = '#268765'; c.fillText(`You saved $${this.receipt.savings.toFixed(2)} and earned`, W / 2, 327); c.fillStyle = '#172b3a'; c.font = '700 31px Space Grotesk'; c.fillText(`${this.score} CART POINTS`, W / 2, 373); c.fillStyle = '#9b7434'; c.font = '15px Space Grotesk'; c.fillText(this.score >= 200 ? 'Deal master status: unlocked ✨' : 'Nice haul! Try stacking deals next time.', W / 2, 410); }
+    else { c.fillStyle = '#52636c'; c.font = '16px Space Grotesk'; c.fillText(`You shopped for ${this.pendingRecord?.seconds || 0} seconds.`, W / 2, 302); }
+    roundedRect(c, 280, 458, 215, 52, 8, '#e8f0f3', '#cbd8de'); c.fillStyle = '#193546'; c.font = '700 11px DM Mono'; c.fillText('VIEW LEADERBOARD', 387, 490);
+    roundedRect(c, 505, 458, 215, 52, 8, '#ffd814', '#f0c400'); c.fillStyle = '#172b3a'; c.fillText('SHOP AGAIN', 612, 490);
+  }
+}

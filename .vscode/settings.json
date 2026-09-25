@@ -1,0 +1,8 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "/^cd c:/Users/wanxi/Ryan/py_game_center ; python -m pytest name_passcode/tests/test_name_passcode\\.py$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}

@@ -79,3 +79,16 @@ button { font:inherit; color:inherit; cursor:pointer; }
 .ring-one { top:53px; width:180px; height:180px; }.ring-two { top:25px; width:260px; height:260px; border-color:rgba(161,230,214,.28); }
 .orbit-moon { position:absolute; top:72px; left:calc(50% + 72px); color:#a1e6d6; font-size:28px; transform:rotate(30deg); }
 .orbit-star { position:absolute; color:#fff4bd; font-size:28px; }.star-one { top:50px; left:28px; }.star-two { right:27px; bottom:46px; color:#ff9c7a; }
+.loom-art { background:radial-gradient(circle at 45% 45%,#fff6da 0,#f5c9cf 62%,#e7aebd 100%); }
+.loom-thread { position:absolute; height:11px; border-radius:99px; transform-origin:left center; box-shadow:0 3px 8px rgba(57,34,66,.18); }
+.thread-one { top:105px; left:42px; width:175px; background:#ff5d8f; transform:rotate(27deg); }
+.thread-two { top:179px; left:50px; width:177px; background:#62a9ff; transform:rotate(-26deg); }
+.thread-three { top:129px; left:77px; width:140px; background:#57d8b2; transform:rotate(-5deg); }
+.loom-peg { position:absolute; width:24px; height:24px; border:7px solid #fff8ec; border-radius:50%; background:#59627b; box-shadow:0 3px 6px rgba(57,34,66,.25); }
+.peg-a { top:91px; left:33px; }.peg-b { top:165px; left:43px; }.peg-c { top:153px; right:32px; }.peg-d { top:96px; right:48px; }
+.loom-bead { position:absolute; top:115px; left:50%; display:grid; place-items:center; width:42px; height:42px; border:4px solid #fff8ec; border-radius:50%; color:#fff8ec; background:#ffb84d; font-size:22px; box-shadow:0 5px 13px rgba(57,34,66,.2); }
+.amazon-art { background:linear-gradient(145deg,#d7eff6,#9ec8d5); }
+.amazon-bag { position:absolute; top:43px; left:35px; display:grid; place-items:center; width:126px; height:128px; border-radius:12px 12px 24px 24px; color:#fff; background:#18394b; font:700 28px "Space Grotesk",sans-serif; box-shadow:0 13px 0 rgba(28,67,82,.13); }
+.amazon-bag::before { content:""; position:absolute; top:-24px; width:54px; height:43px; border:8px solid #18394b; border-bottom:0; border-radius:32px 32px 0 0; }
+.amazon-spark { position:absolute; color:#fff7c2; font-size:35px; }.spark-left { top:37px; right:25px; }.spark-right { right:26px; bottom:66px; color:#ffbf49; font-size:48px; }
+.amazon-box { position:absolute; z-index:1; width:63px; height:55px; border:3px solid #fff2cf; background:#dc9b61; box-shadow:0 6px 0 rgba(73,54,40,.13); }.box-one { left:29px; bottom:39px; transform:rotate(-12deg); }.box-two { left:117px; bottom:28px; background:#efbd74; transform:rotate(9deg); }.amazon-cart { position:absolute; right:16px; top:114px; z-index:2; font-size:62px; filter:drop-shadow(0 5px 2px rgba(31,55,67,.16)); }
