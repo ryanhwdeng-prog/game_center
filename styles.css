@@ -36,6 +36,15 @@ button { font:inherit; color:inherit; cursor:pointer; }
 .line-one { width:165px; top:133px; left:22px; background:#ef6351; box-shadow:18px 28px 0 #4c6fff; }
 .line-two { width:130px; top:205px; left:58px; background:#38a169; transform:rotate(21deg); }
 .drawing-brush { position:absolute; right:42px; top:88px; display:grid; place-items:center; width:78px; height:78px; border:12px solid #17211d; border-radius:50%; color:#f6d36f; font-size:30px; box-shadow:0 15px 0 #ef6351; }
+.boondoggle-card { background:linear-gradient(135deg,#f8f9ff,#e7edff); }
+.boon-glyph { position:absolute; display:grid; place-items:center; width:52px; height:52px; border-radius:18px; background:rgba(18,28,54,.82); color:#fff6d0; font:700 24px "Space Grotesk",sans-serif; box-shadow:0 10px 24px rgba(18,28,54,.18); }
+.boon-a { top:44px; left:42px; }
+.boon-b { top:110px; left:94px; background:#7dd8c8; color:#102b2b; }
+.boon-c { right:48px; top:58px; width:64px; height:64px; background:#f6c868; color:#2e1d0d; }
+.boon-d { bottom:62px; left:55px; background:#f0a6b2; color:#2d1420; }
+.boon-grid { position:absolute; inset:170px 26px 25px; border-radius:18px; border:1px solid rgba(24,34,63,.2); background:linear-gradient(135deg, rgba(255,255,255,.8), rgba(190,210,255,.4)); }
+.boon-grid::before, .boon-grid::after { content:""; position:absolute; inset:0; background-image:linear-gradient(rgba(18,28,54,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(18,28,54,.12) 1px, transparent 1px); background-size:32px 32px; border-radius:18px; }
+.boon-grid::after { inset:14px; opacity:.7; }
 .notes-view { padding-top:36px; }
 .notes-appbar { display:flex; align-items:flex-end; justify-content:space-between; gap:24px; margin-bottom:28px; }
 .notes-appbar h2 { margin:0; font-size:clamp(42px,6vw,72px); line-height:.9; letter-spacing:-.07em; }
@@ -92,3 +101,8 @@ button { font:inherit; color:inherit; cursor:pointer; }
 .amazon-bag::before { content:""; position:absolute; top:-24px; width:54px; height:43px; border:8px solid #18394b; border-bottom:0; border-radius:32px 32px 0 0; }
 .amazon-spark { position:absolute; color:#fff7c2; font-size:35px; }.spark-left { top:37px; right:25px; }.spark-right { right:26px; bottom:66px; color:#ffbf49; font-size:48px; }
 .amazon-box { position:absolute; z-index:1; width:63px; height:55px; border:3px solid #fff2cf; background:#dc9b61; box-shadow:0 6px 0 rgba(73,54,40,.13); }.box-one { left:29px; bottom:39px; transform:rotate(-12deg); }.box-two { left:117px; bottom:28px; background:#efbd74; transform:rotate(9deg); }.amazon-cart { position:absolute; right:16px; top:114px; z-index:2; font-size:62px; filter:drop-shadow(0 5px 2px rgba(31,55,67,.16)); }
+.wordsearch-card { background:linear-gradient(135deg,#fbf8ec,#e7eee4); }.wordsearch-art { background:#d7e8d7; }
+.wordsearch-letters { position:absolute; display:flex; align-items:center; justify-content:center; gap:7px; width:190px; height:54px; border:1px solid rgba(48,83,58,.18); border-radius:8px; color:#294b36; background:rgba(255,253,248,.88); box-shadow:0 8px 20px rgba(34,75,57,.1); font:600 17px "DM Mono",monospace; letter-spacing:.04em; }
+.letters-one { top:68px; left:14px; transform:rotate(-8deg); }.letters-two { top:151px; left:52px; transform:rotate(7deg); background:#f6d36f; }
+.wordsearch-string { position:absolute; top:126px; left:68px; width:141px; height:4px; border-radius:9px; background:#ef795e; transform:rotate(35deg); box-shadow:0 0 0 5px rgba(239,121,94,.12); }
+.wordsearch-mark { position:absolute; top:38px; right:23px; color:#fffdf8; font-size:38px; text-shadow:0 3px 0 #75a17c; }

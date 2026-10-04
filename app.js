@@ -4,9 +4,6 @@ const menuView = document.querySelector('#menuView');
 const gameView = document.querySelector('#gameView');
 const notesView = document.querySelector('#notesView');
 const authView = document.querySelector('#authView');
-const authForm = document.querySelector('#authForm');
-const passwordInput = document.querySelector('#passwordInput');
-const authError = document.querySelector('#authError');
 const title = document.querySelector('#gameTitle');
 const kicker = document.querySelector('#gameKicker');
 const hint = document.querySelector('#gameHint');
@@ -16,23 +13,11 @@ let soundEnabled = true;
 let audioContext = null, beatTimer = 0, beatStep = 0;
 const keys = {};
 const pointer = { x: W / 2, y: H / 2, down: false };
-const GAME_PASSWORD = '540612';
-let authenticated = false;
+let authenticated = true;
 let notesApp = null;
 
-authForm.addEventListener('submit', event => {
-  event.preventDefault();
-  if (passwordInput.value === GAME_PASSWORD) {
-    authenticated = true;
-    authView.classList.add('hidden');
-    menuView.classList.remove('hidden');
-    authError.textContent = '';
-    passwordInput.value = '';
-    return;
-  }
-  authError.textContent = 'Incorrect password. Try again.';
-  passwordInput.select();
-});
+authView?.classList.add('hidden');
+menuView?.classList.remove('hidden');
 
 document.querySelectorAll('[data-game]').forEach(card => card.addEventListener('click', () => startGame(card.dataset.game)));
 document.querySelectorAll('[data-action="menu"]').forEach(button => button.addEventListener('click', showMenu));
@@ -64,8 +49,8 @@ function locate(event) { const rect = canvas.getBoundingClientRect(); pointer.x 
 canvas.addEventListener('pointermove', locate);
 canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; activeGame?.pointerDown(); });
 window.addEventListener('pointerup', () => { pointer.down = false; activeGame?.pointerUp?.(); });
-function showMenu() { if (!authenticated) return; cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
-function startGame(name) { if (!authenticated) return;
+function showMenu() { cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
+function startGame(name) {
   if (name === 'notes') {
     cancelAnimationFrame(raf); activeGame = null; menuView.classList.add('hidden'); gameView.classList.add('hidden'); notesView.classList.remove('hidden');
     document.querySelector('#statusText').textContent = 'NOTES OPEN'; notesApp ||= new NotesApp(); notesApp.open(); return;
@@ -76,11 +61,13 @@ function startGame(name) { if (!authenticated) return;
     cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' },
     balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' },
     guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' },
+    boondoggle: { game: BoondoggleGame, title: 'Boondoggle', kicker: 'A PLASTIC STRING WORD GAME', hint: 'CLICK NEIGHBORING PEGS • PULL STRING • PRESS ENTER TO LOCK IT' },
     runaway: { game: RunAwayGame, title: 'Run Away From the Cat', kicker: 'A QUICK REFLEX CHASE', hint: 'HOLD THE MOUSE AND DRAG IT AWAY FROM THE CAT' },
     drawing: { game: DrawingGame, title: 'Drawing Game', kicker: 'A CREATIVE DOODLE STUDIO', hint: 'HOLD + DRAG TO DRAW • CLICK THE TOOLS TO PLAY' },
     orbit: { game: OrbitGardenGame, title: 'Orbit Garden', kicker: 'A COSMIC GARDENING TOY', hint: 'MOVE THE MOON • TAP TO SEND AN ORBIT PULSE' },
     loom: { game: RainbowLoomGame, title: 'Rainbow Loom Lab', kicker: 'A COLORFUL BAND-WEAVING CHALLENGE', hint: 'PICK A COLOR • DRAG BETWEEN PEGS TO WEAVE A MATCH' },
-    amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' }
+    amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' },
+    wordsearch: { game: WordSearchGame, title: 'Word Search', kicker: 'A CALM LETTER-HUNT PUZZLE', hint: 'CHOOSE A LEVEL • TAP THE FIRST AND LAST LETTER OF EACH WORD' }
   };
   const selected = games[name];
   if (!selected) return;
@@ -89,7 +76,7 @@ function startGame(name) { if (!authenticated) return;
   hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500);
   if (soundEnabled) startBeat(); last = performance.now(); loop(last);
 }
-function loop(now) { if (!activeGame) return; const dt = Math.min((now - last) / 1000, .033); last = now; activeGame.update(dt, now / 1000); activeGame.draw(ctx, now / 1000); raf = requestAnimationFrame(loop); }
+function loop(now) { if (!activeGame) return; const dt = Math.min((now - last) / 1000, .033); last = now; activeGame.update(dt, now / 1000); if (activeGame.leaderboardOpen || activeGame.nameEntry || activeGame.finished) hint.classList.add('fade'); activeGame.draw(ctx, now / 1000); raf = requestAnimationFrame(loop); }
 function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
 function vector(x, y) { return { x, y }; }
 function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
@@ -312,6 +299,210 @@ class GuessPasswordGame {
 
     if (pointer.x >= newTitleBox.x && pointer.x <= newTitleBox.x + newTitleBox.w && pointer.y >= newTitleBox.y && pointer.y <= newTitleBox.y + newTitleBox.h) {
       this.activeField = 'newTitle';
+    }
+  }
+}
+
+class BoondoggleGame {
+  constructor() { this.reset(); }
+  reset() {
+    this.board = [
+      ['B', 'L', 'O', 'O'],
+      ['R', 'O', 'O', 'M'],
+      ['G', 'L', 'O', 'W'],
+      ['S', 'T', 'A', 'R']
+    ];
+    this.pegPositions = [];
+    for (let row = 0; row < 4; row++) {
+      for (let col = 0; col < 4; col++) {
+        this.pegPositions.push({
+          x: 195 + col * 165,
+          y: 180 + row * 135,
+          row,
+          col,
+          index: row * 4 + col
+        });
+      }
+    }
+    this.selected = [];
+    this.word = '';
+    this.message = 'PULL STRING • CLICK ADJACENT PEGS';
+    this.score = 0;
+    this.found = new Set();
+    this.timeLeft = 60;
+    this.flash = 0;
+    this.sparks = Array.from({ length: 18 }, () => ({
+      x: 220 + Math.random() * 560,
+      y: 220 + Math.random() * 300,
+      r: 2 + Math.random() * 4,
+      a: Math.random() * Math.PI * 2,
+      v: 0.5 + Math.random() * 1.1
+    }));
+  }
+  handleKey(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+      this.submit();
+      return true;
+    }
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      if (this.selected.length) {
+        this.selected.pop();
+        this.word = this.currentWord();
+      }
+      this.message = this.selected.length ? `STRING • ${this.word.toUpperCase()}` : 'PULL STRING • CLICK ADJACENT PEGS';
+      return true;
+    }
+    return false;
+  }
+  currentWord() {
+    return this.selected.map(index => this.board[Math.floor(index / 4)][index % 4]).join('');
+  }
+  validWords() {
+    return new Set(['BLOOM', 'LOOM', 'ROOM', 'GLOW', 'STAR', 'FLOW', 'SLOW', 'BOLT', 'ROAM', 'BOOM', 'ART', 'RAT', 'TAR', 'ARM', 'BAR', 'GOAL', 'WARM', 'BLOWS', 'GLOAT', 'STORM']);
+  }
+  isAdjacent(indexA, indexB) {
+    const rowA = Math.floor(indexA / 4);
+    const colA = indexA % 4;
+    const rowB = Math.floor(indexB / 4);
+    const colB = indexB % 4;
+    return Math.abs(rowA - rowB) <= 1 && Math.abs(colA - colB) <= 1;
+  }
+  getPegAtPointer() {
+    for (const peg of this.pegPositions) {
+      const distanceToPeg = Math.hypot(pointer.x - peg.x, pointer.y - peg.y);
+      if (distanceToPeg < 34) return peg.index;
+    }
+    return null;
+  }
+  pointerDown() {
+    const index = this.getPegAtPointer();
+    if (index === null) return;
+    if (this.selected.includes(index)) {
+      if (this.selected[this.selected.length - 1] === index) {
+        this.selected.pop();
+      }
+      this.word = this.currentWord();
+      this.message = this.selected.length ? `STRING • ${this.word.toUpperCase()}` : 'PULL STRING • CLICK ADJACENT PEGS';
+      return;
+    }
+    if (!this.selected.length) {
+      this.selected = [index];
+      this.word = this.currentWord();
+      this.message = `STRING • ${this.word.toUpperCase()}`;
+      return;
+    }
+    const last = this.selected[this.selected.length - 1];
+    if (!this.isAdjacent(last, index)) {
+      this.selected = [index];
+      this.word = this.currentWord();
+      this.message = `NEW STRING • ${this.word.toUpperCase()}`;
+      return;
+    }
+    this.selected.push(index);
+    this.word = this.currentWord();
+    this.message = `STRING • ${this.word.toUpperCase()}`;
+  }
+  submit() {
+    const candidate = this.word.toUpperCase();
+    if (candidate.length < 3) {
+      this.message = 'NEED 3 LETTERS OR MORE';
+      return;
+    }
+    if (!this.validWords().has(candidate)) {
+      this.message = `${candidate} ISN'T ON THE STRING LIST`; this.flash = 1; this.selected = []; this.word = ''; return;
+    }
+    if (this.found.has(candidate)) {
+      this.message = `${candidate} IS ALREADY WOVEN`; this.selected = []; this.word = ''; return;
+    }
+    this.found.add(candidate);
+    const base = Math.max(6, candidate.length * 4);
+    this.score += base;
+    this.message = `${candidate} • +${base} POINTS`; this.flash = 1; this.selected = []; this.word = '';
+  }
+  update(dt) {
+    this.timeLeft = Math.max(0, this.timeLeft - dt);
+    this.flash = Math.max(0, this.flash - dt * 1.8);
+    for (const spark of this.sparks) {
+      spark.a += spark.v * dt * 2.8;
+      spark.x += Math.cos(spark.a) * 7 * dt * 60;
+      spark.y += Math.sin(spark.a) * 5 * dt * 60;
+      if (spark.x < 120 || spark.x > 900 || spark.y < 120 || spark.y > 620) {
+        spark.x = 180 + Math.random() * 640;
+        spark.y = 160 + Math.random() * 360;
+      }
+    }
+  }
+  draw(c, time) {
+    c.fillStyle = '#0f1325'; c.fillRect(0, 0, W, H);
+    const gloss = c.createLinearGradient(0, 0, 0, H);
+    gloss.addColorStop(0, '#1d2345');
+    gloss.addColorStop(0.55, '#182c3f');
+    gloss.addColorStop(1, '#121d2d');
+    c.fillStyle = gloss; c.fillRect(0, 0, W, H);
+
+    for (const spark of this.sparks) {
+      c.fillStyle = `hsla(${205 + spark.r * 16}deg 90% 75% / 0.75)`;
+      c.beginPath(); c.arc(spark.x, spark.y, spark.r, 0, Math.PI * 2); c.fill();
+    }
+
+    roundedRect(c, 26, 26, 220, 86, 20, 'rgba(21, 30, 51, 0.72)', 'rgba(191, 216, 255, 0.45)');
+    c.fillStyle = '#f6f1d4'; c.font = '700 42px Space Grotesk'; c.textAlign = 'left'; c.fillText('BOONDOGGLE', 42, 74);
+    c.fillStyle = '#bfdcff'; c.font = '600 14px DM Mono'; c.fillText('PLASTIC STRING / WORD LOOP', 44, 97);
+
+    roundedRect(c, 760, 28, 200, 86, 20, 'rgba(255, 220, 136, 0.12)', 'rgba(255, 222, 168, 0.42)');
+    c.fillStyle = '#f8d677'; c.font = '600 12px DM Mono'; c.fillText('SCORE', 786, 54);
+    c.fillStyle = '#fff8de'; c.font = '700 34px Space Grotesk'; c.fillText(String(this.score).padStart(3, '0'), 786, 90);
+
+    roundedRect(c, 392, 28, 190, 86, 20, 'rgba(143, 220, 210, 0.10)', 'rgba(138, 229, 206, 0.42)');
+    c.fillStyle = '#abe2d4'; c.font = '600 12px DM Mono'; c.fillText('TIMER', 426, 54);
+    c.fillStyle = '#ebfff9'; c.font = '700 34px Space Grotesk'; c.fillText(`${Math.ceil(this.timeLeft)}s`, 426, 90);
+
+    c.save();
+    c.translate(0, 0);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    for (let index = 0; index < this.selected.length - 1; index++) {
+      const pegA = this.pegPositions[this.selected[index]];
+      const pegB = this.pegPositions[this.selected[index + 1]];
+      const glow = index % 2 === 0 ? '#ffc857' : '#8fe7ff';
+      c.strokeStyle = 'rgba(255,255,255,0.15)';
+      c.lineWidth = 30;
+      c.beginPath(); c.moveTo(pegA.x, pegA.y); c.lineTo(pegB.x, pegB.y); c.stroke();
+      c.strokeStyle = glow;
+      c.lineWidth = 16;
+      c.beginPath(); c.moveTo(pegA.x, pegA.y); c.lineTo(pegB.x, pegB.y); c.stroke();
+      c.strokeStyle = 'rgba(255,255,255,0.8)';
+      c.lineWidth = 5;
+      c.beginPath(); c.moveTo(pegA.x, pegA.y); c.lineTo(pegB.x, pegB.y); c.stroke();
+    }
+    c.restore();
+
+    for (const peg of this.pegPositions) {
+      const isSelected = this.selected.includes(peg.index);
+      c.fillStyle = isSelected ? '#f7dc85' : '#dfe8ff';
+      c.strokeStyle = isSelected ? '#fff2b7' : 'rgba(180, 208, 255, 0.7)';
+      c.lineWidth = isSelected ? 5 : 3;
+      c.beginPath(); c.arc(peg.x, peg.y, 28, 0, Math.PI * 2); c.fill(); c.stroke();
+      c.fillStyle = isSelected ? '#2d3468' : '#1f2d4f';
+      c.font = '700 28px Space Grotesk'; c.textAlign = 'center';
+      c.fillText(this.board[peg.row][peg.col], peg.x, peg.y + 10);
+    }
+
+    roundedRect(c, 120, 603, 760, 70, 18, 'rgba(15, 20, 33, 0.82)', 'rgba(160, 210, 255, 0.45)');
+    c.fillStyle = '#eef7ff'; c.font = '600 22px Space Grotesk'; c.textAlign = 'left';
+    c.fillText(this.message, 146, 647);
+
+    c.fillStyle = '#d7f9ff'; c.font = '500 15px DM Mono'; c.fillText('FOUND', 720, 624);
+    c.fillStyle = '#f4ead1'; c.font = '600 16px DM Mono';
+    const found = Array.from(this.found).slice(-6);
+    c.fillText(found.length ? found.join(' • ') : 'NONE YET', 720, 648);
+
+    c.textAlign = 'right'; c.fillStyle = '#d7ebff'; c.font = '500 14px DM Mono'; c.fillText('[ENTER] LOCK • [BACKSPACE] UNDO • [R] SHUFFLE', W - 32, H - 26);
+
+    if (this.timeLeft <= 0) {
+      c.fillStyle = 'rgba(8,11,18,.72)'; c.fillRect(0, 0, W, H);
+      c.fillStyle = '#fff4be'; c.font = '700 52px Space Grotesk'; c.textAlign = 'center'; c.fillText('ROUND OVER', W / 2, 310);
+      c.fillStyle = '#dfeefc'; c.font = '600 20px Space Grotesk'; c.fillText(`FINAL SCORE • ${this.score}`, W / 2, 350);
+      c.fillStyle = '#9ed8ff'; c.font = '500 15px DM Mono'; c.fillText('PRESS R TO PULL A NEW STRING BOARD', W / 2, 390);
     }
   }
 }
@@ -603,7 +794,9 @@ class AmazonCartGame {
       { name: 'Cozy Socks', category: 'fun', price: 9, icon: '≋', color: '#f28c9b' },
       { name: 'Mystery Mug', category: 'fun', price: 16, icon: '☕', color: '#c1a3df' }
     ];
-      this.records = this.loadRecords();
+    this.records = [];
+    this.recordsError = false;
+    this.recordsPromise = this.loadRecords();
       try { this.lastPlayerName = localStorage.getItem('amazon-cart-player-name') || ''; } catch { this.lastPlayerName = ''; }
       this.boardSort = 'score';
     this.reset();
@@ -625,15 +818,36 @@ class AmazonCartGame {
     this.leaderboardOpen = false;
     this.dealIndex = Math.floor(Math.random() * this.products.length);
   }
-  loadRecords() {
-    try {
-      const saved = JSON.parse(localStorage.getItem('amazon-cart-leaderboard') || '[]');
-      if (Array.isArray(saved)) return saved.filter(record => record && typeof record.name === 'string' && Number.isFinite(record.seconds) && Number.isFinite(record.score)).slice(0, 50);
-    } catch {}
-    return [];
+  normalizeRecord(record) {
+    return { ...record, count: record.item_count ?? record.count ?? 0, date: record.date ?? Date.parse(record.created_at) };
   }
-  saveRecords() {
-    try { localStorage.setItem('amazon-cart-leaderboard', JSON.stringify(this.records)); } catch { this.message = 'COULD NOT SAVE LOCALLY — STORAGE MAY BE FULL'; }
+  async loadRecords() {
+    try {
+      let response = await fetch('/api/scores?limit=500');
+      if (!response.ok) throw new Error('Score database unavailable');
+      let result = await response.json();
+      this.records = result.scores.map(record => this.normalizeRecord(record));
+      const migrated = localStorage.getItem('amazon-cart-scores-migrated') === 'true';
+      if (!migrated) {
+        const oldRecords = JSON.parse(localStorage.getItem('amazon-cart-leaderboard') || '[]');
+        if (Array.isArray(oldRecords)) {
+          for (const record of oldRecords) {
+            if (typeof record.name !== 'string' || !Number.isFinite(record.seconds) || !Number.isFinite(record.score)) continue;
+            const saved = await fetch('/api/scores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(record) });
+            if (!saved.ok) throw new Error('Could not migrate saved scores');
+          }
+        }
+        localStorage.setItem('amazon-cart-scores-migrated', 'true');
+        response = await fetch('/api/scores?limit=500');
+        if (!response.ok) throw new Error('Score database unavailable');
+        result = await response.json();
+        this.records = result.scores.map(record => this.normalizeRecord(record));
+      }
+      this.recordsError = false;
+    } catch {
+      this.recordsError = true;
+      this.message = 'DATABASE OFFLINE — RUN scores_server.py TO LOAD THE LEADERBOARD';
+    }
   }
   handleKey(event) {
     if (this.nameEntry) {
@@ -649,17 +863,26 @@ class AmazonCartGame {
     if (event.key.toLowerCase() === 'l') { this.leaderboardOpen = true; return true; }
     return false;
   }
-  saveRecord() {
+  async saveRecord() {
     if (!this.pendingRecord) return;
     const name = this.nameDraft.trim().slice(0, 16) || 'SHOPPER';
-    const record = { ...this.pendingRecord, name, date: Date.now() };
-    this.records.unshift(record);
-    this.records = this.records.slice(0, 50);
-    this.lastPlayerName = name;
-    try { localStorage.setItem('amazon-cart-player-name', name); } catch {}
-    this.saveRecords();
     this.nameEntry = false;
-    this.leaderboardOpen = true;
+    try {
+      const response = await fetch('/api/scores', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...this.pendingRecord, name })
+      });
+      if (!response.ok) throw new Error('Could not save score');
+      const result = await response.json();
+      this.records.push(this.normalizeRecord(result.score));
+      this.lastPlayerName = name;
+      try { localStorage.setItem('amazon-cart-player-name', name); } catch {}
+      this.leaderboardOpen = true;
+    } catch {
+      this.nameEntry = true;
+      this.message = 'DATABASE OFFLINE — SCORE NOT SAVED. START scores_server.py AND RETRY';
+    }
   }
   startRecordEntry() {
     const count = this.cart.reduce((sum, quantity) => sum + quantity, 0);
@@ -816,13 +1039,13 @@ class AmazonCartGame {
   drawLeaderboard(c) {
     c.fillStyle = 'rgba(13,28,39,.84)'; c.fillRect(0, 0, W, H); roundedRect(c, 130, 60, 740, 575, 18, '#f7fafb', '#ffd65a');
     c.textAlign = 'left'; c.fillStyle = '#193546'; c.font = '700 34px Space Grotesk'; c.fillText('TOP SHOPPERS', 170, 111);
+    if (this.recordsError) { c.fillStyle = '#b4493c'; c.font = '12px DM Mono'; c.fillText('DATABASE OFFLINE • START THE GAME SERVER TO LOAD SAVED RUNS', 172, 139); }
     const totalSeconds = this.records.reduce((sum, record) => sum + record.seconds, 0);
     const totalTime = `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`;
-    c.fillStyle = '#74848c'; c.font = '12px DM Mono'; c.fillText(`${this.records.length} SAVED RUNS  •  ${totalTime} TOTAL SHOP TIME  •  THIS DEVICE`, 172, 139);
-    roundedRect(c, 180, 161, 240, 38, 7, this.boardSort === 'score' ? '#193546' : '#e7eef1', '#d2dde1'); c.fillStyle = this.boardSort === 'score' ? '#fff' : '#566871'; c.textAlign = 'center'; c.font = '600 11px DM Mono'; c.fillText('★  CART POINTS', 300, 185);
-    roundedRect(c, 435, 161, 240, 38, 7, this.boardSort === 'seconds' ? '#193546' : '#e7eef1', '#d2dde1'); c.fillStyle = this.boardSort === 'seconds' ? '#fff' : '#566871'; c.fillText('◷  SHOP TIME', 555, 185);
+    c.fillStyle = '#74848c'; c.font = '12px DM Mono'; c.fillText(`${this.records.length} SAVED RUNS  •  ${totalTime} TOTAL SHOP TIME  •  PERMANENT DATABASE`, 172, 139);
+    roundedRect(c, 180, 161, 495, 38, 7, '#193546', '#d2dde1'); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '600 11px DM Mono'; c.fillText('⚡  FASTEST SHOPPERS FIRST', 427, 185);
     c.textAlign = 'left'; c.fillStyle = '#98a5aa'; c.font = '10px DM Mono'; c.fillText('RANK', 176, 226); c.fillText('SHOPPER', 235, 226); c.fillText('CART SCORE', 570, 226); c.fillText('TIME SHOPPED', 712, 226);
-    const sorted = [...this.records].sort((a, b) => this.boardSort === 'score' ? b.score - a.score || b.seconds - a.seconds : b.seconds - a.seconds || b.score - a.score).slice(0, 7);
+    const sorted = [...this.records].sort((a, b) => a.seconds - b.seconds || b.score - a.score).slice(0, 7);
     if (!sorted.length) { c.textAlign = 'center'; c.fillStyle = '#62747d'; c.font = '18px Space Grotesk'; c.fillText('No runs saved yet. Make the first great haul!', W / 2, 360); c.font = '38px Space Grotesk'; c.fillText('🛍️', W / 2, 315); }
     sorted.forEach((record, index) => {
       const y = 239 + index * 45; roundedRect(c, 165, y, 670, 39, 7, index === 0 ? '#fff4cc' : index % 2 ? '#edf3f5' : '#f2f6f7');
@@ -831,7 +1054,7 @@ class AmazonCartGame {
       c.fillStyle = '#829098'; c.font = '10px DM Mono'; c.fillText(`${record.count} ITEMS  ·  ${new Date(record.date || Date.now()).toLocaleDateString([], { month: 'short', day: 'numeric' }).toUpperCase()}`, 235, y + 32);
       c.textAlign = 'right'; c.fillStyle = '#233a46'; c.font = '700 15px DM Mono'; c.fillText(`${record.score}`, 642, y + 25); c.fillStyle = '#268765'; c.fillText(`${record.seconds}s`, 806, y + 25);
     });
-    c.textAlign = 'left'; c.fillStyle = '#8a999f'; c.font = '10px DM Mono'; c.fillText('SHOP AGAIN TO ADD ANOTHER RUN  •  SCORES ARE STORED LOCALLY', 170, 612);
+    c.textAlign = 'left'; c.fillStyle = '#8a999f'; c.font = '10px DM Mono'; c.fillText('SHOP AGAIN TO ADD ANOTHER RUN  •  SAVED IN SQLITE DATABASE', 170, 612);
     roundedRect(c, 714, 585, 136, 34, 6, '#193546', '#193546'); c.fillStyle = '#fff'; c.textAlign = 'center'; c.font = '600 10px DM Mono'; c.fillText('BACK TO STORE', 782, 607);
   }
   drawFinished(c) {
@@ -841,5 +1064,296 @@ class AmazonCartGame {
     else { c.fillStyle = '#52636c'; c.font = '16px Space Grotesk'; c.fillText(`You shopped for ${this.pendingRecord?.seconds || 0} seconds.`, W / 2, 302); }
     roundedRect(c, 280, 458, 215, 52, 8, '#e8f0f3', '#cbd8de'); c.fillStyle = '#193546'; c.font = '700 11px DM Mono'; c.fillText('VIEW LEADERBOARD', 387, 490);
     roundedRect(c, 505, 458, 215, 52, 8, '#ffd814', '#f0c400'); c.fillStyle = '#172b3a'; c.fillText('SHOP AGAIN', 612, 490);
+  }
+}
+
+class WordSearchGame {
+  constructor() {
+    this.level = null;
+    this.reset();
+  }
+  reset() {
+    if (this.level) {
+      this.startLevel(this.level);
+      return;
+    }
+    this.grid = [];
+    this.words = [];
+    this.found = new Set();
+    this.foundPaths = [];
+    this.wordPaths = new Map();
+    this.selectedStart = null;
+    this.clueWord = null;
+    this.wordPage = 0;
+    this.gridCanvas = null;
+    this.viewRow = 0;
+    this.viewCol = 0;
+    this.message = 'CHOOSE A DIFFICULTY TO BEGIN';
+  }
+  startLevel(level) {
+    const wordLists = {
+      easy: ['APPLE', 'PEACH'],
+      mid: ['PLANET', 'COMET', 'GALAXY', 'ORBIT'],
+      hard: ['PLANET', 'COMET', 'GALAXY', 'ORBIT', 'NEBULA', 'METEOR', 'ROCKET', 'STARS', 'MOON', 'ASTRONAUT', 'SATURN', 'VENUS'],
+      impossible: ['PLANET', 'COMET', 'GALAXY', 'ORBIT', 'NEBULA', 'METEOR', 'ROCKET', 'STARS', 'MOON', 'ASTRONAUT', 'SATURN', 'VENUS', 'MERCURY', 'JUPITER', 'NEPTUNE', 'URANUS', 'PLUTO', 'COSMOS', 'TELESCOPE', 'ASTEROID', 'ECLIPSE', 'CRATER', 'GRAVITY', 'LAUNCH', 'SPACESHIP', 'STARSHIP', 'ALIEN', 'ASTRAL', 'LUNAR', 'SOLAR', 'UNIVERSE', 'CONSTELLATION', 'SUPERNOVA', 'BLACKHOLE', 'MILKYWAY', 'ANDROMEDA', 'POLARIS', 'SIRIUS', 'LIGHTYEAR', 'ORION', 'CASSIOPEIA', 'AURORA', 'SATELLITE', 'ROVER', 'LANDER', 'MODULE', 'SHUTTLE', 'CAPSULE', 'ENGINE', 'THRUSTER', 'FUEL', 'MISSION', 'DISCOVERY', 'EXPLORER', 'OBSERVATORY', 'ASTRONOMY', 'MOONLIGHT', 'SUNRISE', 'SUNSET', 'DAYLIGHT', 'RADIATION', 'VACUUM', 'GALACTIC', 'CELESTIAL', 'PLANETARY', 'INTERSTELLAR', 'INTERPLANETARY', 'COSMONAUT', 'SPACEMAN', 'SPACETIME', 'WORMHOLE', 'QUASAR', 'PULSAR', 'DARKMATTER', 'DARKENERGY', 'REDGIANT', 'WHITEDWARF', 'NEUTRONSTAR', 'EVENTHORIZON', 'TITAN', 'EUROPA', 'GANYMEDE', 'CALLISTO', 'PHOBOS', 'DEIMOS', 'TRITON', 'CHARON', 'CERES', 'VESTA', 'ERIS', 'HAUMEA', 'MAKEMAKE', 'KUIPER', 'OORTCLOUD', 'ZODIAC', 'EQUINOX', 'SOLSTICE', 'BIGBANG', 'STARLIGHT', 'SPACECRAFT']
+    };
+    this.level = level;
+    this.words = wordLists[level];
+    this.size = { easy: 5, mid: 6, hard: 10, impossible: 100 }[level];
+    this.found = new Set();
+    this.foundPaths = [];
+    this.wordPaths = new Map();
+    this.selectedStart = null;
+    this.clueWord = null;
+    this.wordPage = 0;
+    this.gridCanvas = null;
+    this.viewRow = 0;
+    this.viewCol = 0;
+    this.message = 'TAP THE FIRST AND LAST LETTER OF A WORD';
+    this.createGrid();
+  }
+  createGrid() {
+    const size = this.size;
+    const directions = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+    let solution = null;
+    for (let attempt = 0; attempt < 12 && !solution; attempt++) {
+      const grid = Array.from({ length: size }, () => Array(size).fill(''));
+      const placements = new Map();
+      let success = true;
+      for (const word of this.words) {
+        let placed = false;
+        for (let tries = 0; tries < (size === 100 ? 1000 : 250) && !placed; tries++) {
+          const [dx, dy] = directions[Math.floor(Math.random() * directions.length)];
+          const x = Math.floor(Math.random() * size);
+          const y = Math.floor(Math.random() * size);
+          const endX = x + dx * (word.length - 1);
+          const endY = y + dy * (word.length - 1);
+          if (endX < 0 || endX >= size || endY < 0 || endY >= size) continue;
+          let fits = true;
+          for (let index = 0; index < word.length; index++) {
+            const existing = grid[y + dy * index][x + dx * index];
+            if (existing && existing !== word[index]) { fits = false; break; }
+          }
+          if (!fits) continue;
+          for (let index = 0; index < word.length; index++) grid[y + dy * index][x + dx * index] = word[index];
+          placements.set(word, { start: { row: y, col: x }, end: { row: endY, col: endX } });
+          placed = true;
+        }
+        if (!placed) { success = false; break; }
+      }
+      if (success) solution = { grid, placements };
+    }
+    if (!solution) {
+      const grid = Array.from({ length: size }, () => Array(size).fill(''));
+      const placements = new Map();
+      this.words.forEach((word, index) => {
+        const row = index % size;
+        const vertical = index >= size;
+        const col = vertical ? (index * 7) % Math.max(1, size - word.length + 1) : 0;
+        for (let letter = 0; letter < word.length; letter++) grid[row + (vertical ? letter : 0)][col + (vertical ? 0 : letter)] = word[letter];
+        placements.set(word, { start: { row, col }, end: { row: row + (vertical ? word.length - 1 : 0), col: col + (vertical ? 0 : word.length - 1) } });
+      });
+      solution = { grid, placements };
+    }
+    for (let row = 0; row < size; row++) {
+      for (let col = 0; col < size; col++) {
+        if (!solution.grid[row][col]) solution.grid[row][col] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      }
+    }
+    this.grid = solution.grid;
+    this.wordPaths = solution.placements;
+    if (this.level === 'impossible') this.renderImpossibleViewport();
+  }
+  renderImpossibleViewport() {
+    const cell = 29, windowSize = 20;
+    this.gridCanvas = document.createElement('canvas');
+    this.gridCanvas.width = cell * windowSize;
+    this.gridCanvas.height = cell * windowSize;
+    const gridContext = this.gridCanvas.getContext('2d');
+    gridContext.fillStyle = '#fffdf8'; gridContext.fillRect(0, 0, this.gridCanvas.width, this.gridCanvas.height);
+    gridContext.strokeStyle = 'rgba(36, 53, 44, .18)'; gridContext.lineWidth = 1;
+    gridContext.font = '600 17px Space Grotesk, sans-serif'; gridContext.textAlign = 'center'; gridContext.textBaseline = 'middle'; gridContext.fillStyle = '#24352c';
+    for (let row = 0; row < windowSize; row++) {
+      for (let col = 0; col < windowSize; col++) {
+        const x = col * cell, y = row * cell;
+        gridContext.strokeRect(x, y, cell, cell);
+        gridContext.fillText(this.grid[this.viewRow + row][this.viewCol + col], x + cell / 2, y + cell / 2);
+      }
+    }
+  }
+  boardRect() {
+    if (this.level === 'impossible') return { left: 20, top: 91, cell: 29 };
+    const cell = this.level === 'easy' ? 56 : this.level === 'mid' ? 52 : 46;
+    return { left: (W - cell * this.size) / 2, top: this.level === 'hard' ? 106 : 150, cell };
+  }
+  cellAt(x, y) {
+    const { left, top, cell } = this.boardRect();
+    const col = Math.floor((x - left) / cell), row = Math.floor((y - top) / cell);
+    if (this.level === 'impossible') {
+      return col >= 0 && col < 20 && row >= 0 && row < 20 ? { row: row + this.viewRow, col: col + this.viewCol } : null;
+    }
+    return col >= 0 && col < this.size && row >= 0 && row < this.size ? { row, col } : null;
+  }
+  giveClue() {
+    const word = this.words.find(candidate => !this.found.has(candidate));
+    if (!word) return;
+    this.clueWord = word;
+    const { start, end } = this.wordPaths.get(word);
+    if (this.level === 'impossible') {
+      this.viewRow = clamp(Math.min(start.row, end.row) - 4, 0, this.size - 20);
+      this.viewCol = clamp(Math.min(start.col, end.col) - 4, 0, this.size - 20);
+      this.wordPage = Math.floor(this.words.indexOf(word) / 20);
+      this.selectedStart = null;
+      this.renderImpossibleViewport();
+    }
+    const row = Math.sign(end.row - start.row), col = Math.sign(end.col - start.col);
+    const direction = row === 0 ? (col > 0 ? 'RIGHT' : 'LEFT') : col === 0 ? (row > 0 ? 'DOWN' : 'UP') : row === col ? (row > 0 ? 'DOWN-RIGHT' : 'UP-LEFT') : (row > 0 ? 'DOWN-LEFT' : 'UP-RIGHT');
+    this.message = `CLUE: ${word} STARTS AT ROW ${start.row + 1}, COLUMN ${start.col + 1} • ${direction}`;
+  }
+  pointerDown() {
+    if (!this.level) {
+      const choices = ['easy', 'mid', 'hard', 'impossible'];
+      const positions = [{ x: 112, y: 302 }, { x: 372, y: 302 }, { x: 112, y: 448 }, { x: 372, y: 448 }];
+      for (let index = 0; index < choices.length; index++) {
+        const { x, y } = positions[index];
+        if (pointer.x >= x && pointer.x <= x + 232 && pointer.y >= y && pointer.y <= y + 125) {
+          this.startLevel(choices[index]);
+          return;
+        }
+      }
+      return;
+    }
+    if (pointer.x >= 820 && pointer.x <= 970 && pointer.y >= 20 && pointer.y <= 75) {
+      this.giveClue();
+      return;
+    }
+    if (this.level === 'impossible' && pointer.y >= 572 && pointer.y <= 612) {
+      if (pointer.x >= 620 && pointer.x <= 707) this.viewRow = Math.max(0, this.viewRow - 12);
+      if (pointer.x >= 710 && pointer.x <= 797) this.viewRow = Math.min(this.size - 20, this.viewRow + 12);
+      if (pointer.x >= 800 && pointer.x <= 887) this.viewCol = Math.max(0, this.viewCol - 12);
+      if (pointer.x >= 890 && pointer.x <= 977) this.viewCol = Math.min(this.size - 20, this.viewCol + 12);
+      this.renderImpossibleViewport();
+      return;
+    }
+    if (this.level === 'impossible' && pointer.y >= 642 && pointer.y <= 680) {
+      if (pointer.x >= 620 && pointer.x <= 743) this.wordPage = Math.max(0, this.wordPage - 1);
+      if (pointer.x >= 767 && pointer.x <= 970) this.wordPage = Math.min(Math.ceil(this.words.length / 20) - 1, this.wordPage + 1);
+      return;
+    }
+    const cell = this.cellAt(pointer.x, pointer.y);
+    if (!cell || this.found.size === this.words.length) return;
+    if (!this.selectedStart) {
+      this.selectedStart = cell;
+      this.message = 'NOW TAP THE LAST LETTER';
+      return;
+    }
+    if (cell.row === this.selectedStart.row && cell.col === this.selectedStart.col) {
+      this.selectedStart = null;
+      this.message = 'SELECTION CLEARED • CHOOSE A FIRST LETTER';
+      return;
+    }
+    this.checkSelection(this.selectedStart, cell);
+    this.selectedStart = null;
+  }
+  checkSelection(start, end) {
+    const rowDiff = end.row - start.row, colDiff = end.col - start.col;
+    const steps = Math.max(Math.abs(rowDiff), Math.abs(colDiff));
+    if (rowDiff !== 0 && colDiff !== 0 && Math.abs(rowDiff) !== Math.abs(colDiff)) {
+      this.message = 'CHOOSE LETTERS IN A STRAIGHT LINE';
+      return;
+    }
+    const rowStep = Math.sign(rowDiff), colStep = Math.sign(colDiff);
+    let letters = '';
+    for (let index = 0; index <= steps; index++) letters += this.grid[start.row + rowStep * index][start.col + colStep * index];
+    const match = this.words.find(word => !this.found.has(word) && (word === letters || word === [...letters].reverse().join('')));
+    if (!match) {
+      this.message = 'NO WORD THERE • TRY ANOTHER PAIR';
+      return;
+    }
+    this.found.add(match);
+    this.foundPaths.push({ start, end, word: match });
+    this.clueWord = null;
+    this.message = this.found.size === this.words.length ? 'PUZZLE COMPLETE! YOU FOUND EVERY WORD!' : `${match} FOUND • ${this.words.length - this.found.size} LEFT`;
+  }
+  update() {}
+  draw(c) {
+    c.fillStyle = '#f4f0e7'; c.fillRect(0, 0, W, H);
+    c.textAlign = 'left'; c.fillStyle = '#17211d'; c.font = '700 34px Space Grotesk'; c.fillText('WORD SEARCH', 36, 48);
+    c.fillStyle = '#748078'; c.font = '13px DM Mono'; c.fillText('FIND THE HIDDEN WORDS • NO TIMER', 39, 75);
+    if (!this.level) {
+      c.textAlign = 'center'; c.fillStyle = '#17211d'; c.font = '600 29px Space Grotesk'; c.fillText('Choose your difficulty', W / 2, 225);
+      c.fillStyle = '#758078'; c.font = '15px Space Grotesk'; c.fillText('Pick a level to build your letter grid', W / 2, 257);
+      const choices = [{ name: 'EASY', count: 2, size: '5 × 5', color: '#d9f0d2' }, { name: 'MID', count: 4, size: '6 × 6', color: '#d8e9f2' }, { name: 'HARD', count: 12, size: '10 × 10', color: '#f4d8d0' }, { name: 'IMPOSSIBLE', count: 100, size: '100 × 100', color: '#ddd5f1' }];
+      choices.forEach((choice, index) => {
+        const x = index % 2 ? 372 : 112, y = index < 2 ? 302 : 448;
+        roundedRect(c, x, y, 232, 125, 9, choice.color, '#cfc9bc');
+        c.fillStyle = '#17211d'; c.font = '700 24px Space Grotesk'; c.fillText(choice.name, x + 116, y + 34);
+        c.fillStyle = '#59645d'; c.font = '13px DM Mono'; c.fillText(`${choice.count} WORD${choice.count > 1 ? 'S' : ''} • ${choice.size}`, x + 116, y + 63);
+        c.fillStyle = '#748078'; c.font = '12px Space Grotesk'; c.fillText('TAP TO PLAY', x + 116, y + 96);
+      });
+      c.fillStyle = '#748078'; c.font = '13px DM Mono'; c.fillText('WORDS CAN HIDE HORIZONTALLY, VERTICALLY, OR DIAGONALLY', W / 2, 620);
+      return;
+    }
+    c.textAlign = 'right'; c.fillStyle = '#69736c'; c.font = '13px DM Mono'; c.fillText(`${this.level.toUpperCase()}  •  ${this.found.size}/${this.words.length} FOUND`, 800, 47);
+    roundedRect(c, 830, 22, 140, 43, 6, '#d8ef63', '#aebe54'); c.textAlign = 'center'; c.fillStyle = '#17211d'; c.font = '700 12px DM Mono'; c.fillText('GIVE A CLUE', 900, 49);
+    c.textAlign = 'center'; c.fillStyle = '#526057'; c.font = this.level === 'impossible' ? '11px DM Mono' : '13px Space Grotesk'; c.fillText(this.message, this.level === 'impossible' ? 345 : W / 2, 96, this.level === 'impossible' ? 620 : 900);
+
+    const { left, top, cell } = this.boardRect();
+    const visibleSize = this.level === 'impossible' ? 20 : this.size;
+    roundedRect(c, left - 5, top - 5, cell * visibleSize + 10, cell * visibleSize + 10, 8, '#fffdf8', '#d8d1c5');
+    if (this.gridCanvas) c.drawImage(this.gridCanvas, left, top, cell * visibleSize, cell * visibleSize);
+    if (this.level !== 'impossible') {
+      for (let row = 0; row < this.size; row++) {
+        for (let col = 0; col < this.size; col++) {
+          c.fillStyle = '#fffdf8'; c.fillRect(left + col * cell + 1, top + row * cell + 1, cell - 2, cell - 2);
+        }
+      }
+    }
+    for (const path of this.foundPaths) {
+      if (this.level === 'impossible' && [path.start.row, path.end.row].some(row => row < this.viewRow || row >= this.viewRow + visibleSize) || this.level === 'impossible' && [path.start.col, path.end.col].some(col => col < this.viewCol || col >= this.viewCol + visibleSize)) continue;
+      const a = { x: left + (path.start.col - this.viewCol) * cell + cell / 2, y: top + (path.start.row - this.viewRow) * cell + cell / 2 };
+      const b = { x: left + (path.end.col - this.viewCol) * cell + cell / 2, y: top + (path.end.row - this.viewRow) * cell + cell / 2 };
+      c.strokeStyle = 'rgba(101, 174, 128, .34)'; c.lineWidth = Math.max(3, cell * .66); c.lineCap = 'round'; c.beginPath(); c.moveTo(a.x, a.y); c.lineTo(b.x, b.y); c.stroke();
+    }
+    if (this.clueWord && !this.found.has(this.clueWord)) {
+      const clue = this.wordPaths.get(this.clueWord).start;
+      c.strokeStyle = '#ff715b'; c.lineWidth = Math.max(2, cell * .08); c.beginPath(); c.arc(left + (clue.col - this.viewCol) * cell + cell / 2, top + (clue.row - this.viewRow) * cell + cell / 2, Math.max(7, cell * .38), 0, Math.PI * 2); c.stroke();
+    }
+    if (this.selectedStart) {
+      const x = left + (this.selectedStart.col - this.viewCol) * cell + cell / 2, y = top + (this.selectedStart.row - this.viewRow) * cell + cell / 2;
+      c.strokeStyle = '#d49c22'; c.lineWidth = Math.max(2, cell * .08); c.beginPath(); c.arc(x, y, Math.max(7, cell * .38), 0, Math.PI * 2); c.stroke();
+    }
+    if (!this.gridCanvas) {
+      for (let row = 0; row < this.size; row++) {
+        for (let col = 0; col < this.size; col++) {
+          const x = left + col * cell, y = top + row * cell;
+          c.fillStyle = '#24352c'; c.font = '600 23px Space Grotesk'; c.textAlign = 'center'; c.fillText(this.grid[row][col], x + cell / 2, y + cell * .68);
+        }
+      }
+    }
+    if (this.level === 'impossible') {
+      c.textAlign = 'left'; c.fillStyle = '#17211d'; c.font = '700 12px DM Mono'; c.fillText(`100 × 100 BOARD • ROWS ${this.viewRow + 1}-${this.viewRow + 20}`, 620, 120);
+      c.fillStyle = '#68736b'; c.font = '11px DM Mono'; c.fillText(`COLUMNS ${this.viewCol + 1}-${this.viewCol + 20}`, 620, 138);
+      this.words.slice(this.wordPage * 20, (this.wordPage + 1) * 20).forEach((word, index) => {
+        const done = this.found.has(word), clue = this.clueWord === word;
+        c.fillStyle = done ? '#43825a' : clue ? '#cf5545' : '#68736b'; c.font = `${done ? '600' : '500'} 12px DM Mono`;
+        c.fillText(`${done ? '✓' : '○'} ${word}`, 622, 163 + index * 19);
+      });
+      for (const [x, label] of [[620, '↑ ROW'], [710, '↓ ROW'], [800, '← COL'], [890, 'COL →']]) {
+        roundedRect(c, x, 572, 87, 40, 5, '#fffdf8', '#cfc9bc'); c.fillStyle = '#17211d'; c.textAlign = 'center'; c.font = '10px DM Mono'; c.fillText(label, x + 43, 597);
+      }
+      roundedRect(c, 620, 642, 123, 34, 5, '#fffdf8', '#cfc9bc'); c.fillStyle = '#17211d'; c.textAlign = 'center'; c.font = '11px DM Mono'; c.fillText('← PREV LIST', 681, 664);
+      roundedRect(c, 767, 642, 143, 34, 5, '#fffdf8', '#cfc9bc'); c.fillStyle = '#17211d'; c.fillText('NEXT LIST →', 838, 664);
+    } else {
+      c.textAlign = 'left'; c.fillStyle = '#17211d'; c.font = '700 14px DM Mono'; c.fillText('WORDS TO FIND', 38, 613);
+      this.words.forEach((word, index) => {
+        const col = Math.floor(index / 4), row = index % 4;
+        const x = 40 + col * 315, y = 640 + row * 17;
+        const done = this.found.has(word);
+        c.fillStyle = done ? '#43825a' : this.clueWord === word ? '#cf5545' : '#68736b'; c.font = `${done ? '600' : '500'} 13px DM Mono`;
+        c.fillText(`${done ? '✓' : '○'}  ${word}`, x, y);
+      });
+    }
+    c.textAlign = 'right'; c.fillStyle = '#92988e'; c.font = '11px DM Mono'; c.fillText('[R] NEW PUZZLE  •  [ESC] MENU', 962, this.level === 'impossible' ? 695 : 683);
   }
 }

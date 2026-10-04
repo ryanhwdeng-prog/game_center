@@ -3,6 +3,10 @@
         "/^cd c:/Users/wanxi/Ryan/py_game_center ; python -m pytest name_passcode/tests/test_name_passcode\\.py$/": {
             "approve": true,
             "matchCommandLine": true
+        },
+        "/^python -c \"import tempfile; from pathlib import Path; from scores_server import save_score, fetch_scores; d=Path\\(tempfile\\.gettempdir\\(\\)\\)/'amazon_scores_check\\.sqlite3'; d\\.unlink\\(missing_ok=True\\); save_score\\(\\{'name':'Slow','seconds':20,'score':90,'count':2,'savings':1\\.5,'total':30\\}, d\\); save_score\\(\\{'name':'Fast','seconds':8,'score':40,'count':1,'savings':0,'total':15\\}, d\\); assert \\[r\\['name'\\] for r in fetch_scores\\(d\\)\\] == \\['Fast','Slow'\\]; assert fetch_scores\\(d\\)\\[0\\]\\['seconds'\\] == 8; print\\('SQLite persistence/order check passed'\\); d\\.unlink\\(missing_ok=True\\); Path\\(str\\(d\\)\\+'-wal'\\)\\.unlink\\(missing_ok=True\\); Path\\(str\\(d\\)\\+'-shm'\\)\\.unlink\\(missing_ok=True\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
         }
     }
 }
