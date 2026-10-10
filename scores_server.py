@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
@@ -10,11 +11,12 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parent
-DATABASE_PATH = ROOT / "amazon_cart_scores.sqlite3"
+DATABASE_PATH = Path(os.environ.get("DATABASE_PATH", ROOT / "amazon_cart_scores.sqlite3"))
 MAX_REQUEST_BYTES = 8192
 
 
 def connect_database(database_path: Path = DATABASE_PATH) -> sqlite3.Connection:
+    database_path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(database_path)
     connection.row_factory = sqlite3.Row
     connection.execute(
@@ -137,8 +139,10 @@ class ScoresHandler(SimpleHTTPRequestHandler):
 
 
 def main() -> None:
-    server = ThreadingHTTPServer(("127.0.0.1", 8000), ScoresHandler)
-    print(f"Game Center running at http://127.0.0.1:{server.server_port}")
+    host = os.environ.get("HOST", "0.0.0.0")
+    port = int(os.environ.get("PORT", "8000"))
+    server = ThreadingHTTPServer((host, port), ScoresHandler)
+    print(f"Game Center listening on {host}:{server.server_port}")
     print(f"Scores database: {DATABASE_PATH}")
     try:
         server.serve_forever()
