@@ -5,7 +5,10 @@ import sys
 from getpass import getpass
 from pathlib import Path
 
-import pygame
+try:
+    import pygame
+except ModuleNotFoundError:  # pragma: no cover - runtime dependency for the GUI launcher
+    pygame = None
 
 ROOT = Path(__file__).resolve().parent
 WINDOW_WIDTH = 1000
@@ -19,7 +22,7 @@ class GameCard:
         self.folder = folder
         self.script_name = script_name
         self.color = color
-        self.rect = pygame.Rect(0, 0, 300, 160)
+        self.rect = pygame.Rect(0, 0, 300, 160) if pygame is not None and hasattr(pygame, "Rect") else None
 
 
 def find_games():
@@ -27,13 +30,22 @@ def find_games():
     for folder in sorted(ROOT.iterdir()):
         if not folder.is_dir() or folder.name.startswith("."):
             continue
+        valid_scripts = []
         for script in sorted(folder.glob("*.py")):
-            if script.name == "game_center.py":
+            if script.name in {"game_center.py", "__init__.py", "__main__.py"}:
                 continue
+            valid_scripts.append(script)
+
+        for script in valid_scripts:
             name = folder.name.replace("_", " ").title()
             color = (84, 160, 255) if folder.name.lower() == "bear" else (240, 120, 180)
             games.append(GameCard(name, folder.name, script.name, color))
     return games
+
+
+def require_pygame():
+    if pygame is None:
+        raise RuntimeError("Pygame is required to run the game center. Install it with 'python -m pip install pygame'.")
 
 
 def launch_game(game_path: Path):
@@ -41,6 +53,7 @@ def launch_game(game_path: Path):
 
 
 def draw_center_menu(screen, games, hovered_index, selected_index, quit_button):
+    require_pygame()
     screen.fill((18, 25, 40))
 
     title = pygame.font.SysFont(None, 68, bold=True).render("GAME CENTER", True, (255, 245, 200))
@@ -95,6 +108,7 @@ def draw_center_menu(screen, games, hovered_index, selected_index, quit_button):
 
 
 def main():
+    require_pygame()
     if getpass("Enter game center password: ") != GAME_PASSWORD:
         print("Incorrect password.")
         return
@@ -119,6 +133,8 @@ def main():
             elif event.type == pygame.MOUSEMOTION:
                 hovered_index = -1
                 for index, game in enumerate(games):
+                    if game.rect is None:
+                        continue
                     if game.rect.collidepoint(mouse_pos):
                         hovered_index = index
                         break
@@ -127,6 +143,8 @@ def main():
                     running = False
                     break
                 for index, game in enumerate(games):
+                    if game.rect is None:
+                        continue
                     if game.rect.collidepoint(mouse_pos):
                         selected_index = index
                         launch_game(ROOT / games[index].folder / games[index].script_name)
