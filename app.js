@@ -56,19 +56,6 @@ function startGame(name) {
     document.querySelector('#statusText').textContent = 'NOTES OPEN'; notesApp ||= new NotesApp(); notesApp.open(); return;
   }
   cancelAnimationFrame(raf);
-  const games = {
-    bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' },
-    cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' },
-    balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' },
-    guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' },
-    boondoggle: { game: BoondoggleGame, title: 'Boondoggle', kicker: 'A PLASTIC STRING WORD GAME', hint: 'CLICK NEIGHBORING PEGS • PULL STRING • PRESS ENTER TO LOCK IT' },
-    runaway: { game: RunAwayGame, title: 'Run Away From the Cat', kicker: 'A QUICK REFLEX CHASE', hint: 'HOLD THE MOUSE AND DRAG IT AWAY FROM THE CAT' },
-    drawing: { game: DrawingGame, title: 'Drawing Game', kicker: 'A CREATIVE DOODLE STUDIO', hint: 'HOLD + DRAG TO DRAW • CLICK THE TOOLS TO PLAY' },
-    orbit: { game: OrbitGardenGame, title: 'Orbit Garden', kicker: 'A COSMIC GARDENING TOY', hint: 'MOVE THE MOON • TAP TO SEND AN ORBIT PULSE' },
-    loom: { game: RainbowLoomGame, title: 'Rainbow Loom Lab', kicker: 'A COLORFUL BAND-WEAVING CHALLENGE', hint: 'PICK A COLOR • DRAG BETWEEN PEGS TO WEAVE A MATCH' },
-    amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' },
-    wordsearch: { game: WordSearchGame, title: 'Word Search', kicker: 'A CALM LETTER-HUNT PUZZLE', hint: 'CHOOSE A LEVEL • TAP THE FIRST AND LAST LETTER OF EACH WORD' }
-  };
   const selected = games[name];
   if (!selected) return;
   activeGame = new selected.game(); menuView.classList.add('hidden'); notesView.classList.add('hidden'); gameView.classList.remove('hidden');
@@ -76,6 +63,80 @@ function startGame(name) {
   hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500);
   if (soundEnabled) startBeat(); last = performance.now(); loop(last);
 }
+
+const games = {
+  bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' },
+  cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' },
+  balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' },
+  guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' },
+  boondoggle: { game: BoondoggleGame, title: 'Boondoggle', kicker: 'A PLASTIC STRING WORD GAME', hint: 'CLICK NEIGHBORING PEGS • PULL STRING • PRESS ENTER TO LOCK IT' },
+  runaway: { game: RunAwayGame, title: 'Run Away From the Cat', kicker: 'A QUICK REFLEX CHASE', hint: 'HOLD THE MOUSE AND DRAG IT AWAY FROM THE CAT' },
+  drawing: { game: DrawingGame, title: 'Drawing Game', kicker: 'A CREATIVE DOODLE STUDIO', hint: 'HOLD + DRAG TO DRAW • CLICK THE TOOLS TO PLAY' },
+  orbit: { game: OrbitGardenGame, title: 'Orbit Garden', kicker: 'A COSMIC GARDENING TOY', hint: 'MOVE THE MOON • TAP TO SEND AN ORBIT PULSE' },
+  loom: { game: RainbowLoomGame, title: 'Rainbow Loom Lab', kicker: 'A COLORFUL BAND-WEAVING CHALLENGE', hint: 'PICK A COLOR • DRAG BETWEEN PEGS TO WEAVE A MATCH' },
+  amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' },
+  wordsearch: { game: WordSearchGame, title: 'Word Search', kicker: 'A CALM LETTER-HUNT PUZZLE', hint: 'CHOOSE A LEVEL • TAP THE FIRST AND LAST LETTER OF EACH WORD' },
+  playground: { game: PlaygroundGame, title: 'Playground', kicker: 'A SUNNY RECESS BREAK', hint: 'MOVE THE POINTER • CLICK TO BOUNCE ON THE SWING' }
+};
+
+class PlaygroundGame {
+  constructor() { this.reset(); }
+  reset() { this.time = 0; this.swing = 0; }
+  pointerDown() { this.swing += 0.45; }
+  update(dt, time) {
+    this.time += dt;
+    const target = (pointer.x / W - 0.5) * 1.4;
+    this.swing += (target - this.swing) * 0.08;
+    if (time % 2 > 1.8) this.swing += Math.sin(time * 4) * 0.012;
+  }
+  draw(c, time) {
+    c.clearRect(0, 0, W, H);
+    c.fillStyle = '#bfe9ff'; c.fillRect(0, 0, W, H);
+    c.fillStyle = '#f9d564'; c.beginPath(); c.arc(820, 120, 60, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(255,255,255,.9)';
+    c.beginPath(); c.arc(180, 140, 26, 0, Math.PI * 2); c.arc(214, 132, 32, 0, Math.PI * 2); c.arc(256, 138, 22, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(360, 150, 24, 0, Math.PI * 2); c.arc(392, 142, 30, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#d5f5af'; c.fillRect(0, 450, W, H - 450);
+    c.fillStyle = '#e6c38f'; c.fillRect(0, 430, W, 20);
+    c.fillStyle = '#f5d49f'; c.fillRect(118, 415, 64, 86);
+    c.fillStyle = '#7e4e38'; c.fillRect(92, 420, 18, 60);
+    c.fillStyle = '#7e4e38'; c.fillRect(198, 420, 18, 60);
+    c.fillStyle = '#c9e8ff'; c.fillRect(236, 430, 160, 16);
+    c.fillStyle = '#3a6c8d'; c.fillRect(260, 420, 18, 76); c.fillRect(344, 420, 18, 76);
+    c.strokeStyle = '#7e4e38'; c.lineWidth = 8; c.beginPath(); c.moveTo(144, 420); c.lineTo(144, 300); c.lineTo(212, 300); c.stroke();
+    c.fillStyle = '#ff7b67'; c.fillRect(418, 305, 130, 110);
+    c.fillStyle = '#ffd98a'; c.fillRect(440, 328, 80, 12);
+    c.fillStyle = '#ff9a7e'; c.beginPath(); c.moveTo(420, 305); c.lineTo(550, 305); c.lineTo(420, 420); c.closePath(); c.fill();
+    c.fillStyle = '#d05f4c'; c.fillRect(168, 242, 142, 10);
+    c.strokeStyle = '#8c5d42'; c.lineWidth = 6; c.beginPath(); c.moveTo(210, 245); c.lineTo(210, 360); c.moveTo(280, 245); c.lineTo(280, 360); c.stroke();
+    c.lineWidth = 4; c.beginPath(); c.moveTo(210, 245); c.lineTo(246, 214); c.lineTo(280, 245); c.moveTo(246, 214); c.lineTo(246, 360); c.stroke();
+    c.strokeStyle = '#af744d'; c.lineWidth = 8; c.beginPath(); c.moveTo(248, 360); c.lineTo(246, 402); c.stroke();
+    c.fillStyle = '#f8d8a6'; c.beginPath(); c.arc(246, 230, 15, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#f4b57d'; c.fillRect(228, 244, 36, 20);
+    c.fillStyle = '#ffc260'; c.fillRect(234, 226, 8, 14); c.fillRect(252, 226, 8, 14);
+    c.save();
+    c.translate(560, 282);
+    c.rotate(this.swing * 0.9);
+    c.fillStyle = '#f7d7c3'; c.fillRect(-5, -2, 10, 96);
+    c.fillStyle = '#c84f4f'; c.fillRect(-50, 84, 100, 12);
+    c.fillStyle = '#f7d7c3'; c.beginPath(); c.arc(0, 78, 34, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#415d7f'; c.fillRect(-20, 100, 40, 65);
+    c.restore();
+    c.fillStyle = '#f7d7c3'; c.beginPath(); c.arc(630, 285, 16, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#c84f4f'; c.fillRect(600, 300, 60, 14);
+    c.strokeStyle = '#687d76'; c.lineWidth = 4; c.beginPath(); c.moveTo(610, 332); c.lineTo(610, 390); c.moveTo(640, 332); c.lineTo(640, 390); c.stroke();
+    c.fillStyle = '#7b6bbf'; c.fillRect(665, 355, 110, 60);
+    c.fillStyle = '#f8efc7'; c.fillRect(690, 372, 22, 18); c.fillRect(726, 372, 22, 18); c.fillRect(762, 372, 22, 18);
+    c.fillStyle = '#e7a54a'; c.fillRect(678, 390, 28, 32); c.fillRect(742, 390, 28, 32);
+    c.fillStyle = '#ff7f50'; c.fillRect(425, 420, 28, 28); c.fillRect(472, 420, 28, 28); c.fillRect(520, 420, 28, 28);
+    c.textAlign = 'left'; c.fillStyle = '#203d58'; c.font = '700 30px Space Grotesk'; c.fillText('PLAYGROUND', 30, 62);
+    c.fillStyle = '#4d5d66'; c.font = '500 13px DM Mono'; c.fillText('SWINGS • SLIDE • CLIMB • SANDPIT', 30, 85);
+    c.textAlign = 'right'; c.fillStyle = '#203d58'; c.font = '500 13px DM Mono'; c.fillText('MOVE • CLICK TO BOUNCE', W - 28, H - 28);
+  }
+}
+
+class NotesApp {
+
 function loop(now) { if (!activeGame) return; const dt = Math.min((now - last) / 1000, .033); last = now; activeGame.update(dt, now / 1000); if (activeGame.leaderboardOpen || activeGame.nameEntry || activeGame.finished) hint.classList.add('fade'); activeGame.draw(ctx, now / 1000); raf = requestAnimationFrame(loop); }
 function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
 function vector(x, y) { return { x, y }; }
