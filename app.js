@@ -16,8 +16,8 @@ const pointer = { x: W / 2, y: H / 2, down: false };
 let authenticated = true;
 let notesApp = null;
 
-authView?.classList.add('hidden');
-menuView?.classList.remove('hidden');
+if (authView) authView.classList.add('hidden');
+if (menuView) menuView.classList.remove('hidden');
 
 document.querySelectorAll('[data-game]').forEach(card => card.addEventListener('click', () => startGame(card.dataset.game)));
 document.querySelectorAll('[data-action="menu"]').forEach(button => button.addEventListener('click', showMenu));
@@ -27,7 +27,7 @@ document.querySelector('[data-action="sound"]').addEventListener('click', () => 
   state.textContent = soundEnabled ? 'ON' : 'OFF';
   if (soundEnabled) startBeat(); else stopBeat();
 });
-document.querySelector('#resetButton').addEventListener('click', () => activeGame?.reset());
+document.querySelector('#resetButton').addEventListener('click', () => { if (activeGame) activeGame.reset(); });
 window.addEventListener('keydown', event => {
   keys[event.key.toLowerCase()] = true;
   if (event.key === 'Escape' && activeGame) showMenu();
@@ -42,18 +42,18 @@ window.addEventListener('keydown', event => {
     }
     if (activeGame.handleKey(event)) return;
   }
-  if (event.key.toLowerCase() === 'r') activeGame?.reset();
+  if (event.key.toLowerCase() === 'r' && activeGame) activeGame.reset();
 });
 window.addEventListener('keyup', event => { keys[event.key.toLowerCase()] = false; });
 function locate(event) { const rect = canvas.getBoundingClientRect(); pointer.x = (event.clientX - rect.left) * W / rect.width; pointer.y = (event.clientY - rect.top) * H / rect.height; }
 canvas.addEventListener('pointermove', locate);
-canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; activeGame?.pointerDown(); });
-window.addEventListener('pointerup', () => { pointer.down = false; activeGame?.pointerUp?.(); });
+canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; if (activeGame && activeGame.pointerDown) activeGame.pointerDown(); });
+window.addEventListener('pointerup', () => { pointer.down = false; if (activeGame && activeGame.pointerUp) activeGame.pointerUp(); });
 function showMenu() { cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
 function startGame(name) {
   if (name === 'notes') {
     cancelAnimationFrame(raf); activeGame = null; menuView.classList.add('hidden'); gameView.classList.add('hidden'); notesView.classList.remove('hidden');
-    document.querySelector('#statusText').textContent = 'NOTES OPEN'; notesApp ||= new NotesApp(); notesApp.open(); return;
+    document.querySelector('#statusText').textContent = 'NOTES OPEN'; if (!notesApp) notesApp = new NotesApp(); notesApp.open(); return;
   }
   cancelAnimationFrame(raf);
   const selected = games[name];
@@ -63,21 +63,6 @@ function startGame(name) {
   hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500);
   if (soundEnabled) startBeat(); last = performance.now(); loop(last);
 }
-
-const games = {
-  bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' },
-  cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' },
-  balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' },
-  guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' },
-  boondoggle: { game: BoondoggleGame, title: 'Boondoggle', kicker: 'A PLASTIC STRING WORD GAME', hint: 'CLICK NEIGHBORING PEGS • PULL STRING • PRESS ENTER TO LOCK IT' },
-  runaway: { game: RunAwayGame, title: 'Run Away From the Cat', kicker: 'A QUICK REFLEX CHASE', hint: 'HOLD THE MOUSE AND DRAG IT AWAY FROM THE CAT' },
-  drawing: { game: DrawingGame, title: 'Drawing Game', kicker: 'A CREATIVE DOODLE STUDIO', hint: 'HOLD + DRAG TO DRAW • CLICK THE TOOLS TO PLAY' },
-  orbit: { game: OrbitGardenGame, title: 'Orbit Garden', kicker: 'A COSMIC GARDENING TOY', hint: 'MOVE THE MOON • TAP TO SEND AN ORBIT PULSE' },
-  loom: { game: RainbowLoomGame, title: 'Rainbow Loom Lab', kicker: 'A COLORFUL BAND-WEAVING CHALLENGE', hint: 'PICK A COLOR • DRAG BETWEEN PEGS TO WEAVE A MATCH' },
-  amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' },
-  wordsearch: { game: WordSearchGame, title: 'Word Search', kicker: 'A CALM LETTER-HUNT PUZZLE', hint: 'CHOOSE A LEVEL • TAP THE FIRST AND LAST LETTER OF EACH WORD' },
-  playground: { game: PlaygroundGame, title: 'Playground', kicker: 'A SUNNY RECESS BREAK', hint: 'MOVE THE POINTER • CLICK TO BOUNCE ON THE SWING' }
-};
 
 class PlaygroundGame {
   constructor() { this.reset(); }
@@ -135,15 +120,13 @@ class PlaygroundGame {
   }
 }
 
-class NotesApp {
-
 function loop(now) { if (!activeGame) return; const dt = Math.min((now - last) / 1000, .033); last = now; activeGame.update(dt, now / 1000); if (activeGame.leaderboardOpen || activeGame.nameEntry || activeGame.finished) hint.classList.add('fade'); activeGame.draw(ctx, now / 1000); raf = requestAnimationFrame(loop); }
 function clamp(value, low, high) { return Math.max(low, Math.min(high, value)); }
 function vector(x, y) { return { x, y }; }
 function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 function lerp(a, b, amount) { return vector(a.x + (b.x - a.x) * amount, a.y + (b.y - a.y) * amount); }
 function roundedRect(c, x, y, width, height, radius, fill, stroke) { c.beginPath(); c.roundRect(x, y, width, height, radius); if (fill) { c.fillStyle = fill; c.fill(); } if (stroke) { c.strokeStyle = stroke; c.stroke(); } }
-function startBeat() { if (beatTimer || !soundEnabled) return; audioContext ||= new AudioContext(); if (audioContext.state === 'suspended') audioContext.resume(); beatStep = 0; const tick = () => { if (!soundEnabled) return; const now = audioContext.currentTime; const oscillator = audioContext.createOscillator(); const gain = audioContext.createGain(); const frequency = [55, 55, 65.4, 49, 55, 73.4, 65.4, 49][beatStep % 8]; oscillator.type = beatStep % 4 === 2 ? 'square' : 'sine'; oscillator.frequency.setValueAtTime(frequency, now); gain.gain.setValueAtTime(.0001, now); gain.gain.exponentialRampToValueAtTime(beatStep % 2 ? .035 : .11, now + .012); gain.gain.exponentialRampToValueAtTime(.0001, now + .22); oscillator.connect(gain).connect(audioContext.destination); oscillator.start(now); oscillator.stop(now + .24); beatStep++; beatTimer = setTimeout(tick, 312); }; tick(); }
+function startBeat() { if (beatTimer || !soundEnabled) return; if (!audioContext) audioContext = new AudioContext(); if (audioContext.state === 'suspended') audioContext.resume(); beatStep = 0; const tick = () => { if (!soundEnabled) return; const now = audioContext.currentTime; const oscillator = audioContext.createOscillator(); const gain = audioContext.createGain(); const frequency = [55, 55, 65.4, 49, 55, 73.4, 65.4, 49][beatStep % 8]; oscillator.type = beatStep % 4 === 2 ? 'square' : 'sine'; oscillator.frequency.setValueAtTime(frequency, now); gain.gain.setValueAtTime(.0001, now); gain.gain.exponentialRampToValueAtTime(beatStep % 2 ? .035 : .11, now + .012); gain.gain.exponentialRampToValueAtTime(.0001, now + .22); oscillator.connect(gain).connect(audioContext.destination); oscillator.start(now); oscillator.stop(now + .24); beatStep++; beatTimer = setTimeout(tick, 312); }; tick(); }
 function stopBeat() { clearTimeout(beatTimer); beatTimer = 0; }
 
 class CatGame {
@@ -199,7 +182,7 @@ class GuessPasswordGame {
         password: saved.password || '0000',
         title: saved.title || 'Guess My Password'
       };
-    } catch {
+    } catch (error) {
       return { password: '0000', title: 'Guess My Password' };
     }
   }
@@ -610,7 +593,7 @@ class NotesApp {
   constructor() {
     this.storageKey = 'game-center-notes';
     this.notes = this.load();
-    this.activeId = this.notes[0]?.id || null;
+    this.activeId = this.notes[0] ? this.notes[0].id : null;
     this.search = document.querySelector('#notesSearch');
     this.list = document.querySelector('#notesList');
     this.titleInput = document.querySelector('#noteTitleInput');
@@ -623,7 +606,7 @@ class NotesApp {
     try {
       const saved = JSON.parse(localStorage.getItem(this.storageKey) || 'null');
       if (Array.isArray(saved) && saved.length) return saved;
-    } catch {}
+    } catch (error) {}
     return [{ id: crypto.randomUUID(), title: 'Welcome to Notes', body: 'A quiet place for bright ideas.\n\nStart typing here, then pin anything you want to keep close.', color: '#f6d36f', pinned: true, updated: Date.now() }];
   }
   bindEvents() {
@@ -643,7 +626,7 @@ class NotesApp {
       }
     });
   }
-  open() { this.renderList(); this.select(this.activeId || this.notes[0]?.id); }
+  open() { this.renderList(); this.select(this.activeId || (this.notes[0] ? this.notes[0].id : null)); }
   active() { return this.notes.find(note => note.id === this.activeId); }
   create() { const note = { id: crypto.randomUUID(), title: 'Untitled note', body: '', color: '#b9e3d0', pinned: false, updated: Date.now() }; this.notes.unshift(note); this.activeId = note.id; this.persist(); this.renderList(); this.select(note.id); this.titleInput.focus(); this.titleInput.select(); }
   select(id) { const note = this.notes.find(item => item.id === id); if (!note) return; this.activeId = id; this.titleInput.value = note.title; this.bodyInput.value = note.body; this.colorInput.value = note.color; document.querySelector('#pinNoteButton').textContent = note.pinned ? '★ PINNED' : '☆ PIN'; document.querySelector('#pinNoteButton').setAttribute('aria-pressed', note.pinned); document.querySelector('#noteMeta').textContent = `UPDATED ${new Date(note.updated).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).toUpperCase()}`; this.renderList(); }
@@ -699,7 +682,7 @@ class DrawingGame {
     this.activeStroke = { color: this.color, size: this.size, points: [] };
     this.addPoint(pointer.x, pointer.y);
   }
-  pointerUp() { if (this.activeStroke?.points.length > 1) this.strokes.push(this.activeStroke); this.activeStroke = null; }
+  pointerUp() { if (this.activeStroke && this.activeStroke.points && this.activeStroke.points.length > 1) this.strokes.push(this.activeStroke); this.activeStroke = null; }
   update() { if (this.activeStroke && pointer.down) this.addPoint(pointer.x, pointer.y); }
   addPoint(x, y) {
     if (y < 92) return;
@@ -858,8 +841,12 @@ class AmazonCartGame {
     this.records = [];
     this.recordsError = false;
     this.recordsPromise = this.loadRecords();
-      try { this.lastPlayerName = localStorage.getItem('amazon-cart-player-name') || ''; } catch { this.lastPlayerName = ''; }
-      this.boardSort = 'score';
+    try {
+      this.lastPlayerName = localStorage.getItem('amazon-cart-player-name') || '';
+    } catch (error) {
+      this.lastPlayerName = '';
+    }
+    this.boardSort = 'score';
     this.reset();
   }
   reset() {
@@ -880,7 +867,7 @@ class AmazonCartGame {
     this.dealIndex = Math.floor(Math.random() * this.products.length);
   }
   normalizeRecord(record) {
-    return { ...record, count: record.item_count ?? record.count ?? 0, date: record.date ?? Date.parse(record.created_at) };
+    return { ...record, count: (record.item_count !== null && typeof record.item_count !== 'undefined') ? record.item_count : ((record.count !== null && typeof record.count !== 'undefined') ? record.count : 0), date: (record.date !== null && typeof record.date !== 'undefined') ? record.date : Date.parse(record.created_at) };
   }
   async loadRecords() {
     try {
@@ -905,7 +892,7 @@ class AmazonCartGame {
         this.records = result.scores.map(record => this.normalizeRecord(record));
       }
       this.recordsError = false;
-    } catch {
+    } catch (error) {
       this.recordsError = true;
       this.message = 'DATABASE OFFLINE — RUN scores_server.py TO LOAD THE LEADERBOARD';
     }
@@ -938,9 +925,11 @@ class AmazonCartGame {
       const result = await response.json();
       this.records.push(this.normalizeRecord(result.score));
       this.lastPlayerName = name;
-      try { localStorage.setItem('amazon-cart-player-name', name); } catch {}
+      try {
+        localStorage.setItem('amazon-cart-player-name', name);
+      } catch (error) {}
       this.leaderboardOpen = true;
-    } catch {
+    } catch (error) {
       this.nameEntry = true;
       this.message = 'DATABASE OFFLINE — SCORE NOT SAVED. START scores_server.py AND RETRY';
     }
@@ -1122,7 +1111,7 @@ class AmazonCartGame {
     c.fillStyle = 'rgba(15,31,43,.76)'; c.fillRect(0, 0, W, H); roundedRect(c, 265, 180, 470, 340, 18, '#fffdf8', '#ffd814');
     c.textAlign = 'center'; c.fillStyle = '#172b3a'; c.font = '700 37px Space Grotesk'; c.fillText(this.receipt ? 'ORDER PLACED!' : 'DEAL DASH ENDED', W / 2, 242);
     if (this.receipt) { c.fillStyle = '#52636c'; c.font = '16px Space Grotesk'; c.fillText(`${this.receipt.count} goodies • Total $${this.receipt.total.toFixed(2)}`, W / 2, 292); c.fillStyle = '#268765'; c.fillText(`You saved $${this.receipt.savings.toFixed(2)} and earned`, W / 2, 327); c.fillStyle = '#172b3a'; c.font = '700 31px Space Grotesk'; c.fillText(`${this.score} CART POINTS`, W / 2, 373); c.fillStyle = '#9b7434'; c.font = '15px Space Grotesk'; c.fillText(this.score >= 200 ? 'Deal master status: unlocked ✨' : 'Nice haul! Try stacking deals next time.', W / 2, 410); }
-    else { c.fillStyle = '#52636c'; c.font = '16px Space Grotesk'; c.fillText(`You shopped for ${this.pendingRecord?.seconds || 0} seconds.`, W / 2, 302); }
+    else { c.fillStyle = '#52636c'; c.font = '16px Space Grotesk'; c.fillText(`You shopped for ${(this.pendingRecord && typeof this.pendingRecord.seconds !== 'undefined') ? this.pendingRecord.seconds : 0} seconds.`, W / 2, 302); } 
     roundedRect(c, 280, 458, 215, 52, 8, '#e8f0f3', '#cbd8de'); c.fillStyle = '#193546'; c.font = '700 11px DM Mono'; c.fillText('VIEW LEADERBOARD', 387, 490);
     roundedRect(c, 505, 458, 215, 52, 8, '#ffd814', '#f0c400'); c.fillStyle = '#172b3a'; c.fillText('SHOP AGAIN', 612, 490);
   }
@@ -1418,3 +1407,18 @@ class WordSearchGame {
     c.textAlign = 'right'; c.fillStyle = '#92988e'; c.font = '11px DM Mono'; c.fillText('[R] NEW PUZZLE  •  [ESC] MENU', 962, this.level === 'impossible' ? 695 : 683);
   }
 }
+
+const games = {
+  bear: { game: BearGame, title: 'Cursor Bear', kicker: 'A WEATHER SURVIVAL GAME', hint: 'MOVE WITH THE CURSOR • WASD WIND' },
+  cat: { game: CatGame, title: 'Stretchy Cat Rap', kicker: 'A SPRINGY MUSIC TOY', hint: 'DRAG EITHER END OF THE CAT' },
+  balloon: { game: PopBalloonGame, title: 'Pop the Balloon', kicker: 'A TAP-TO-POP ARCADE GAME', hint: 'TAP THE BALLOON TO POP IT' },
+  guess: { game: GuessPasswordGame, title: 'Guess My Password', kicker: 'A SECRET CODE PUZZLE', hint: 'ENTER THE PASSWORD TO UNLOCK THE UPDATE FORM' },
+  boondoggle: { game: BoondoggleGame, title: 'Boondoggle', kicker: 'A PLASTIC STRING WORD GAME', hint: 'CLICK NEIGHBORING PEGS • PULL STRING • PRESS ENTER TO LOCK IT' },
+  runaway: { game: RunAwayGame, title: 'Run Away From the Cat', kicker: 'A QUICK REFLEX CHASE', hint: 'HOLD THE MOUSE AND DRAG IT AWAY FROM THE CAT' },
+  drawing: { game: DrawingGame, title: 'Drawing Game', kicker: 'A CREATIVE DOODLE STUDIO', hint: 'HOLD + DRAG TO DRAW • CLICK THE TOOLS TO PLAY' },
+  orbit: { game: OrbitGardenGame, title: 'Orbit Garden', kicker: 'A COSMIC GARDENING TOY', hint: 'MOVE THE MOON • TAP TO SEND AN ORBIT PULSE' },
+  loom: { game: RainbowLoomGame, title: 'Rainbow Loom Lab', kicker: 'A COLORFUL BAND-WEAVING CHALLENGE', hint: 'PICK A COLOR • DRAG BETWEEN PEGS TO WEAVE A MATCH' },
+  amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' },
+  wordsearch: { game: WordSearchGame, title: 'Word Search', kicker: 'A CALM LETTER-HUNT PUZZLE', hint: 'CHOOSE A LEVEL • TAP THE FIRST AND LAST LETTER OF EACH WORD' },
+  playground: { game: PlaygroundGame, title: 'Playground', kicker: 'A SUNNY RECESS BREAK', hint: 'MOVE THE POINTER • CLICK TO BOUNCE ON THE SWING' }
+};
