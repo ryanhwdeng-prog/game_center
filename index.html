@@ -38,12 +38,27 @@
         <button class="game-card wordsearch-card" data-game="wordsearch"><span class="card-number">12</span><span class="card-art wordsearch-art"><span class="wordsearch-letters letters-one">S T A R</span><span class="wordsearch-letters letters-two">M O O N</span><span class="wordsearch-string"></span><span class="wordsearch-mark">✦</span></span><span class="card-info"><span class="card-kicker">A CALM LETTER-HUNT PUZZLE</span><strong>Word Search</strong><span>Choose a difficulty, connect hidden words, and find them all at your own pace.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
         <button class="game-card playground-card" data-game="playground"><span class="card-number">13</span><span class="card-art playground-art" aria-hidden="true"><span class="playground-sun"></span><span class="playground-cloud cloud-one"></span><span class="playground-cloud cloud-two"></span><span class="playground-slide"></span><span class="playground-swing"></span><span class="playground-frame"></span><span class="playground-climber"></span><span class="playground-sandbox"></span></span><span class="card-info"><span class="card-kicker">A SUNNY RECESS BREAK</span><strong>Playground</strong><span>Swings, a slide, a climbing frame, and a bright little corner built for a perfect after-school play break.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
         <a class="game-card piano-card" href="https://www.sheetmusicdirect.com/se/ID_No/507284/Product.aspx?srsltid=AYCX9vJabnYSfv512--ifmcqlb2jAwF0oGG0wJr8dA0E_DD7b9T65IRt" target="_blank" rel="noopener noreferrer"><span class="card-number">14</span><span class="card-art piano-art" aria-hidden="true"><span class="piano-glow"></span><span class="piano-mini-keys"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="piano-notes">♪ ♫</span></span><span class="card-info"><span class="card-kicker">SHEET MUSIC</span><strong>Ryan's piano music</strong><span>Open the sheet music on Sheet Music Direct.</span><span class="card-cta">OPEN SHEET MUSIC <b>↗</b></span></span></a>
+        <button class="game-card chess-card" data-game="chess"><span class="card-number">15</span><span class="card-art chess-art" aria-hidden="true"><span class="chess-card-board">♜ ♞ ♝ ♛<br>♟ ♟ ♟ ♟<br>♙ ♙ ♙ ♙<br>♖ ♘ ♗ ♕</span><span class="chess-card-glow"></span></span><span class="card-info"><span class="card-kicker">A CLASSIC TWO-PLAYER STRATEGY GAME</span><strong>Chess</strong><span>Play a proper turn-based chess match together on one screen.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
       </div>
       <p class="menu-foot">MOVE WITH YOUR MOUSE / TOUCH &nbsp;•&nbsp; ESC TO RETURN</p>
     </section>
     <section id="gameView" class="view game-view hidden">
-      <div class="game-heading"><button class="back-button" data-action="menu">← MENU</button><div><p id="gameKicker" class="eyebrow">NOW PLAYING</p><h2 id="gameTitle">Game</h2></div><button id="resetButton" class="reset-button">RESET <span>R</span></button></div>
+      <div class="game-heading"><button class="back-button" data-action="menu">← MENU</button><div><p id="gameKicker" class="eyebrow">NOW PLAYING</p><h2 id="gameTitle">Game</h2></div><div class="game-heading-actions"><button id="undoButton" class="undo-button hidden" type="button" disabled>UNDO</button><button id="resetButton" class="reset-button">RESET <span>R</span></button></div></div>
       <div class="canvas-wrap"><canvas id="gameCanvas" width="1000" height="700"></canvas><div id="gameHint" class="canvas-hint"></div></div>
+      <section id="chessPanel" class="chess-panel hidden" aria-label="Chess game">
+        <div class="chess-board-column"><p class="chess-instructions">Select a piece to see its legal moves, then choose a highlighted square.</p><div class="chess-board" id="chessBoard" role="grid" aria-label="Chess board"></div></div>
+        <aside class="chess-sidebar">
+          <div class="chess-players">
+            <label class="chess-player black-player"><span class="chess-player-label">BLACK</span><input id="blackPlayerName" type="text" maxlength="24" value="Player 2" aria-label="Black player name"></label>
+            <label class="chess-player white-player"><span class="chess-player-label">WHITE / MOVES FIRST</span><input id="whitePlayerName" type="text" maxlength="24" value="Player 1" aria-label="White player name"></label>
+          </div>
+          <p id="chessTurn" class="chess-turn" aria-live="polite"></p>
+          <p class="chess-piece-key"><strong>PIECE GUIDE</strong><span>♔ King</span><span>♕ Queen</span><span>♖ Rook</span><span>♗ Bishop</span><span>♘ Knight</span><span>♙ Pawn</span></p>
+          <section class="chess-moves" aria-labelledby="chessMovesTitle"><h3 id="chessMovesTitle">MOVE HISTORY</h3><div id="chessMoveList" class="chess-move-list" aria-live="polite"></div></section>
+          <div id="chessPromotion" class="chess-promotion hidden" aria-label="Choose a promotion piece"></div>
+          <div id="chessResult" class="chess-result hidden" role="status"><strong id="chessResultTitle"></strong><span id="chessResultDetail"></span><button id="chessNewGame" type="button">PLAY AGAIN</button></div>
+        </aside>
+      </section>
     </section>
     <section id="notesView" class="view notes-view hidden" aria-labelledby="notesTitle">
       <div class="notes-appbar"><div><p class="eyebrow">PERSONAL WORKSPACE / LOCAL ONLY</p><h2 id="notesTitle">Notes</h2></div><div class="notes-actions"><button id="newNoteButton" class="notes-primary" type="button">＋ NEW NOTE</button><span id="saveStatus" class="save-status">ALL CHANGES SAVED</span></div></div>

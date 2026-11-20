@@ -2,6 +2,8 @@ const canvas = document.querySelector('#gameCanvas');
 const ctx = canvas.getContext('2d');
 const menuView = document.querySelector('#menuView');
 const gameView = document.querySelector('#gameView');
+const canvasWrap = document.querySelector('.canvas-wrap');
+const chessPanel = document.querySelector('#chessPanel');
 const notesView = document.querySelector('#notesView');
 const authView = document.querySelector('#authView');
 const title = document.querySelector('#gameTitle');
@@ -28,9 +30,13 @@ document.querySelector('[data-action="sound"]').addEventListener('click', () => 
   if (soundEnabled) startBeat(); else stopBeat();
 });
 document.querySelector('#resetButton').addEventListener('click', () => { if (activeGame) activeGame.reset(); });
+document.querySelector('#undoButton').addEventListener('click', () => {
+  if (activeGame && typeof activeGame.undo === 'function') activeGame.undo();
+});
 window.addEventListener('keydown', event => {
   keys[event.key.toLowerCase()] = true;
   if (event.key === 'Escape' && activeGame) showMenu();
+  if (activeGame && activeGame.mode === 'chess' && event.target instanceof HTMLInputElement) return;
   if (activeGame && typeof activeGame.handleKey === 'function') {
     if (activeGame.mode === 'guess' || activeGame.mode === 'edit') {
       const isTypingInPasswordGame = activeGame.mode === 'guess' || activeGame.activeField === 'newPassword' || activeGame.activeField === 'newTitle';
@@ -49,7 +55,7 @@ function locate(event) { const rect = canvas.getBoundingClientRect(); pointer.x 
 canvas.addEventListener('pointermove', locate);
 canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; if (activeGame && activeGame.pointerDown) activeGame.pointerDown(); });
 window.addEventListener('pointerup', () => { pointer.down = false; if (activeGame && activeGame.pointerUp) activeGame.pointerUp(); });
-function showMenu() { cancelAnimationFrame(raf); activeGame = null; gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
+function showMenu() { cancelAnimationFrame(raf); activeGame = null; chessPanel.classList.add('hidden'); canvasWrap.classList.remove('hidden'); gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
 function startGame(name) {
   if (name === 'notes') {
     cancelAnimationFrame(raf); activeGame = null; menuView.classList.add('hidden'); gameView.classList.add('hidden'); notesView.classList.remove('hidden');
@@ -58,11 +64,387 @@ function startGame(name) {
   cancelAnimationFrame(raf);
   const selected = games[name];
   if (!selected) return;
+  document.querySelector('#undoButton').classList.toggle('hidden', selected.mode !== 'chess');
   activeGame = new selected.game(); menuView.classList.add('hidden'); notesView.classList.add('hidden'); gameView.classList.remove('hidden');
   title.textContent = selected.title; kicker.textContent = selected.kicker; document.querySelector('#statusText').textContent = 'PLAYING';
   hint.textContent = selected.hint; hint.classList.remove('fade'); setTimeout(() => hint.classList.add('fade'), 3500);
+  if (selected.mode === 'chess') {
+    canvasWrap.classList.add('hidden'); chessPanel.classList.remove('hidden');
+    if (soundEnabled) stopBeat();
+    return;
+  }
+  chessPanel.classList.add('hidden'); canvasWrap.classList.remove('hidden');
   if (soundEnabled) startBeat(); last = performance.now(); loop(last);
 }
+
+const chessGlyphs = {
+  white: { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙' },
+  black: { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' }
+};
+const chessPieceNames = { K: 'King', Q: 'Queen', R: 'Rook', B: 'Bishop', N: 'Knight', P: 'Pawn' };
+const chessDirections = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+function chessInside(row, col) { return row >= 0 && row < 8 && col >= 0 && col < 8; }
+function chessSquareName(row, col) { return `${'abcdefgh'[col]}${8 - row}`; }
+function cloneChessBoard(board) { return board.map(row => row.map(piece => piece && { ...piece })); }
+
+class ChessGame {
+  constructor() {
+    this.mode = 'chess';
+    ChessGame.bindEvents();
+    this.reset();
+  }
+  static bindEvents() {
+    if (ChessGame.bound) return;
+    ChessGame.bound = true;
+    document.querySelector('#chessBoard').addEventListener('click', event => {
+      const square = event.target.closest('[data-row]');
+      if (square && activeGame && activeGame.mode === 'chess') activeGame.chooseSquare(Number(square.dataset.row), Number(square.dataset.col));
+    });
+    document.querySelector('#chessPromotion').addEventListener('click', event => {
+      const choice = event.target.closest('[data-promotion]');
+      if (choice && activeGame && activeGame.mode === 'chess') activeGame.finishPromotion(choice.dataset.promotion);
+    });
+    document.querySelector('#chessNewGame').addEventListener('click', () => {
+      if (activeGame && activeGame.mode === 'chess') activeGame.reset();
+    });
+    ['whitePlayerName', 'blackPlayerName'].forEach(id => document.querySelector(`#${id}`).addEventListener('input', () => {
+      if (activeGame && activeGame.mode === 'chess') activeGame.renderStatus();
+    }));
+  }
+  reset() {
+    const backRank = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
+    this.board = [
+      backRank.map(type => ({ type, color: 'black' })),
+      Array.from({ length: 8 }, () => ({ type: 'P', color: 'black' })),
+      ...Array.from({ length: 4 }, () => Array(8).fill(null)),
+      Array.from({ length: 8 }, () => ({ type: 'P', color: 'white' })),
+      backRank.map(type => ({ type, color: 'white' }))
+    ];
+    this.turn = 'white';
+    this.castling = { white: { K: true, Q: true }, black: { K: true, Q: true } };
+    this.enPassant = null;
+    this.selected = null;
+    this.legalTargets = [];
+    this.history = [];
+    this.undoStack = [];
+    this.result = null;
+    this.pendingPromotion = null;
+    document.querySelector('#chessPromotion').classList.add('hidden');
+    document.querySelector('#chessResult').classList.add('hidden');
+    this.render();
+  }
+  playerName(color) {
+    const input = document.querySelector(color === 'white' ? '#whitePlayerName' : '#blackPlayerName');
+    return input.value.trim() || (color === 'white' ? 'Player 1' : 'Player 2');
+  }
+  undo() {
+    const previous = this.undoStack.pop();
+    if (!previous) return;
+    this.board = previous.board;
+    this.turn = previous.turn;
+    this.castling = previous.castling;
+    this.enPassant = previous.enPassant;
+    this.history.length = previous.historyLength;
+    this.result = null;
+    this.selected = null;
+    this.legalTargets = [];
+    this.pendingPromotion = null;
+    document.querySelector('#chessPromotion').classList.add('hidden');
+    document.querySelector('#chessResult').classList.add('hidden');
+    this.render();
+  }
+  isSquareAttacked(row, col, byColor, board = this.board) {
+    const pawnRow = row + (byColor === 'white' ? 1 : -1);
+    for (const pawnCol of [col - 1, col + 1]) {
+      if (chessInside(pawnRow, pawnCol) && board[pawnRow][pawnCol]?.color === byColor && board[pawnRow][pawnCol].type === 'P') return true;
+    }
+    for (const [dr, dc] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
+      const piece = chessInside(row + dr, col + dc) && board[row + dr][col + dc];
+      if (piece?.color === byColor && piece.type === 'N') return true;
+    }
+    for (const [dr, dc] of chessDirections) {
+      let distance = 1;
+      while (chessInside(row + dr * distance, col + dc * distance)) {
+        const piece = board[row + dr * distance][col + dc * distance];
+        if (piece) {
+          if (piece.color === byColor) {
+            if (piece.type === 'K' && distance === 1) return true;
+            const diagonal = dr !== 0 && dc !== 0;
+            if (piece.type === 'Q' || (diagonal ? piece.type === 'B' : piece.type === 'R')) return true;
+          }
+          break;
+        }
+        distance++;
+      }
+    }
+    return false;
+  }
+  isInCheck(color, board = this.board) {
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+      if (board[row][col]?.type === 'K' && board[row][col].color === color) return this.isSquareAttacked(row, col, color === 'white' ? 'black' : 'white', board);
+    }
+    return true;
+  }
+  pseudoMoves(row, col) {
+    const piece = this.board[row][col];
+    if (!piece) return [];
+    const moves = [];
+    const add = (toRow, toCol, extra = {}) => {
+      if (!chessInside(toRow, toCol)) return;
+      const target = this.board[toRow][toCol];
+      if (!target || target.color !== piece.color) moves.push({ fromRow: row, fromCol: col, toRow, toCol, ...extra });
+    };
+    if (piece.type === 'P') {
+      const direction = piece.color === 'white' ? -1 : 1;
+      const startRow = piece.color === 'white' ? 6 : 1;
+      if (chessInside(row + direction, col) && !this.board[row + direction][col]) {
+        add(row + direction, col);
+        if (row === startRow && !this.board[row + direction * 2][col]) add(row + direction * 2, col, { doublePawn: true });
+      }
+      for (const dc of [-1, 1]) {
+        const targetRow = row + direction, targetCol = col + dc;
+        if (!chessInside(targetRow, targetCol)) continue;
+        if (this.board[targetRow][targetCol]?.color === (piece.color === 'white' ? 'black' : 'white')) add(targetRow, targetCol);
+        else if (this.enPassant && this.enPassant.row === targetRow && this.enPassant.col === targetCol) add(targetRow, targetCol, { enPassant: true });
+      }
+    } else if (piece.type === 'N') {
+      for (const [dr, dc] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) add(row + dr, col + dc);
+    } else if (piece.type === 'K') {
+      for (const [dr, dc] of chessDirections) add(row + dr, col + dc);
+      const homeRow = piece.color === 'white' ? 7 : 0;
+      const enemy = piece.color === 'white' ? 'black' : 'white';
+      if (row === homeRow && col === 4 && !this.isSquareAttacked(row, col, enemy)) {
+        if (this.castling[piece.color].K && !this.board[homeRow][5] && !this.board[homeRow][6] &&
+            this.board[homeRow][7]?.type === 'R' && this.board[homeRow][7].color === piece.color &&
+            !this.isSquareAttacked(homeRow, 5, enemy) && !this.isSquareAttacked(homeRow, 6, enemy)) add(homeRow, 6, { castle: 'K' });
+        if (this.castling[piece.color].Q && !this.board[homeRow][1] && !this.board[homeRow][2] && !this.board[homeRow][3] &&
+            this.board[homeRow][0]?.type === 'R' && this.board[homeRow][0].color === piece.color &&
+            !this.isSquareAttacked(homeRow, 3, enemy) && !this.isSquareAttacked(homeRow, 2, enemy)) add(homeRow, 2, { castle: 'Q' });
+      }
+    } else {
+      const directions = piece.type === 'R' ? chessDirections.slice(0, 4) : piece.type === 'B' ? chessDirections.slice(4) : chessDirections;
+      for (const [dr, dc] of directions) {
+        for (let distance = 1; distance < 8; distance++) {
+          const targetRow = row + dr * distance, targetCol = col + dc * distance;
+          if (!chessInside(targetRow, targetCol)) break;
+          if (this.board[targetRow][targetCol]?.color === piece.color) break;
+          add(targetRow, targetCol);
+          if (this.board[targetRow][targetCol]) break;
+        }
+      }
+    }
+    return moves;
+  }
+  applyToBoard(board, move, promotion = 'Q') {
+    const piece = board[move.fromRow][move.fromCol];
+    board[move.fromRow][move.fromCol] = null;
+    if (move.enPassant) board[move.fromRow][move.toCol] = null;
+    if (move.castle) {
+      const homeRow = move.fromRow;
+      const rookFrom = move.castle === 'K' ? 7 : 0, rookTo = move.castle === 'K' ? 5 : 3;
+      board[homeRow][rookTo] = board[homeRow][rookFrom];
+      board[homeRow][rookFrom] = null;
+    }
+    board[move.toRow][move.toCol] = piece.type === 'P' && (move.toRow === 0 || move.toRow === 7)
+      ? { type: promotion, color: piece.color }
+      : piece;
+  }
+  legalMovesFrom(row, col) {
+    const piece = this.board[row][col];
+    if (!piece) return [];
+    return this.pseudoMoves(row, col).filter(move => {
+      const board = cloneChessBoard(this.board);
+      this.applyToBoard(board, move);
+      return !this.isInCheck(piece.color, board);
+    });
+  }
+  legalMovesFor(color) {
+    const moves = [];
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+      if (this.board[row][col]?.color === color) moves.push(...this.legalMovesFrom(row, col));
+    }
+    return moves;
+  }
+  chooseSquare(row, col) {
+    if (this.result || this.pendingPromotion) return;
+    const piece = this.board[row][col];
+    const target = this.legalTargets.find(move => move.toRow === row && move.toCol === col);
+    if (this.selected && target) {
+      if (this.board[this.selected.row][this.selected.col].type === 'P' && (row === 0 || row === 7)) {
+        this.pendingPromotion = target;
+        this.showPromotionChoices();
+      } else this.makeMove(target);
+      return;
+    }
+    if (piece?.color === this.turn) {
+      this.selected = { row, col };
+      this.legalTargets = this.legalMovesFrom(row, col);
+    } else {
+      this.selected = null;
+      this.legalTargets = [];
+    }
+    this.renderBoard();
+  }
+  showPromotionChoices() {
+    const panel = document.querySelector('#chessPromotion');
+    panel.replaceChildren();
+    ['Q', 'R', 'B', 'N'].forEach(type => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.dataset.promotion = type;
+      button.textContent = `${chessGlyphs[this.turn][type]} ${chessPieceNames[type]}`;
+      panel.append(button);
+    });
+    panel.classList.remove('hidden');
+  }
+  finishPromotion(type) {
+    if (!this.pendingPromotion) return;
+    const move = this.pendingPromotion;
+    this.pendingPromotion = null;
+    document.querySelector('#chessPromotion').classList.add('hidden');
+    this.makeMove(move, type);
+  }
+  makeMove(move, promotion = 'Q') {
+    const piece = this.board[move.fromRow][move.fromCol];
+    const captured = move.enPassant ? this.board[move.fromRow][move.toCol] : this.board[move.toRow][move.toCol];
+    this.undoStack.push({
+      board: cloneChessBoard(this.board),
+      turn: this.turn,
+      castling: { white: { ...this.castling.white }, black: { ...this.castling.black } },
+      enPassant: this.enPassant && { ...this.enPassant },
+      historyLength: this.history.length
+    });
+    const legal = this.legalMovesFor(this.turn);
+    const alternatives = legal.filter(candidate =>
+      (candidate.fromRow !== move.fromRow || candidate.fromCol !== move.fromCol) &&
+      candidate.toRow === move.toRow && candidate.toCol === move.toCol &&
+      this.board[candidate.fromRow][candidate.fromCol]?.type === piece.type);
+    let notation = '';
+    if (move.castle) notation = move.castle === 'K' ? 'O-O' : 'O-O-O';
+    else {
+      notation = piece.type === 'P' ? '' : piece.type;
+      if (alternatives.length) {
+        if (!alternatives.some(candidate => candidate.fromCol === move.fromCol)) notation += 'abcdefgh'[move.fromCol];
+        else if (!alternatives.some(candidate => candidate.fromRow === move.fromRow)) notation += String(8 - move.fromRow);
+        else notation += chessSquareName(move.fromRow, move.fromCol);
+      }
+      if (captured) notation += piece.type === 'P' ? `${'abcdefgh'[move.fromCol]}x` : 'x';
+      notation += chessSquareName(move.toRow, move.toCol);
+      if (piece.type === 'P' && (move.toRow === 0 || move.toRow === 7)) notation += `=${promotion}`;
+    }
+    this.board[move.fromRow][move.fromCol] = null;
+    if (move.enPassant) this.board[move.fromRow][move.toCol] = null;
+    if (move.castle) {
+      const homeRow = move.fromRow, rookFrom = move.castle === 'K' ? 7 : 0, rookTo = move.castle === 'K' ? 5 : 3;
+      this.board[homeRow][rookTo] = this.board[homeRow][rookFrom];
+      this.board[homeRow][rookFrom] = null;
+    }
+    this.board[move.toRow][move.toCol] = piece.type === 'P' && (move.toRow === 0 || move.toRow === 7)
+      ? { type: promotion, color: piece.color }
+      : piece;
+    if (piece.type === 'K') this.castling[piece.color] = { K: false, Q: false };
+    const rookHomeRow = piece.color === 'white' ? 7 : 0;
+    if (piece.type === 'R' && move.fromRow === rookHomeRow && move.fromCol === 0) this.castling[piece.color].Q = false;
+    if (piece.type === 'R' && move.fromRow === rookHomeRow && move.fromCol === 7) this.castling[piece.color].K = false;
+    if (captured?.type === 'R' && move.toRow === (captured.color === 'white' ? 7 : 0)) {
+      if (move.toCol === 0) this.castling[captured.color].Q = false;
+      if (move.toCol === 7) this.castling[captured.color].K = false;
+    }
+    this.enPassant = piece.type === 'P' && Math.abs(move.toRow - move.fromRow) === 2
+      ? { row: (move.toRow + move.fromRow) / 2, col: move.fromCol }
+      : null;
+    this.turn = this.turn === 'white' ? 'black' : 'white';
+    const check = this.isInCheck(this.turn);
+    const replies = this.legalMovesFor(this.turn);
+    if (check) notation += replies.length ? '+' : '#';
+    this.history.push(notation);
+    this.selected = null;
+    this.legalTargets = [];
+    if (!replies.length) this.result = check ? { type: 'checkmate', winner: piece.color } : { type: 'stalemate' };
+    this.render();
+  }
+  render() {
+    this.renderBoard();
+    this.renderStatus();
+    this.renderHistory();
+    this.renderResult();
+    document.querySelector('#undoButton').disabled = this.undoStack.length === 0;
+  }
+  renderBoard() {
+    const boardElement = document.querySelector('#chessBoard');
+    const checkedKing = this.isInCheck(this.turn) ? this.board.flatMap((rank, row) => rank.map((piece, col) =>
+      piece?.type === 'K' && piece.color === this.turn ? { row, col } : null)).find(Boolean) : null;
+    boardElement.replaceChildren();
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 8; col++) {
+      const piece = this.board[row][col];
+      const square = document.createElement('button');
+      square.type = 'button';
+      square.className = `chess-square ${(row + col) % 2 ? 'dark-square' : 'light-square'}`;
+      square.dataset.row = row; square.dataset.col = col;
+      if (this.selected?.row === row && this.selected?.col === col) square.classList.add('selected-square');
+      const targetMove = this.legalTargets.find(move => move.toRow === row && move.toCol === col);
+      if (targetMove) square.classList.add(piece || targetMove.enPassant ? 'capture-square' : 'legal-square');
+      if (checkedKing?.row === row && checkedKing?.col === col) square.classList.add('checked-square');
+      const coordinate = document.createElement('span');
+      coordinate.className = 'square-coordinate';
+      if (row === 7) coordinate.textContent = 'abcdefgh'[col];
+      if (col === 0) coordinate.textContent += `${8 - row}`;
+      square.setAttribute('aria-label', `${chessSquareName(row, col)}${piece ? `, ${piece.color} ${chessPieceNames[piece.type]}` : ''}${targetMove ? ', legal move' : ''}`);
+      if (piece) {
+        const glyph = document.createElement('span');
+        glyph.className = `chess-piece ${piece.color}-piece`;
+        glyph.setAttribute('aria-hidden', 'true');
+        glyph.textContent = chessGlyphs[piece.color][piece.type];
+        square.append(glyph);
+      }
+      square.append(coordinate);
+      boardElement.append(square);
+    }
+  }
+  renderStatus() {
+    const turnElement = document.querySelector('#chessTurn');
+    if (this.result) {
+      turnElement.textContent = this.result.type === 'stalemate' ? 'Draw by stalemate' : 'Checkmate';
+      return;
+    }
+    turnElement.textContent = `${this.playerName(this.turn)} to move · ${this.turn === 'white' ? 'White' : 'Black'}${this.isInCheck(this.turn) ? ' · CHECK' : ''}`;
+  }
+  renderHistory() {
+    const list = document.querySelector('#chessMoveList');
+    list.replaceChildren();
+    if (!this.history.length) {
+      const empty = document.createElement('p');
+      empty.className = 'chess-empty-history';
+      empty.textContent = 'Moves will appear here as you play.';
+      list.append(empty);
+      return;
+    }
+    for (let index = 0; index < this.history.length; index += 2) {
+      const row = document.createElement('div');
+      row.className = 'chess-move-row';
+      const number = document.createElement('span');
+      number.className = 'move-number'; number.textContent = `${Math.floor(index / 2) + 1}.`;
+      const whiteMove = document.createElement('span');
+      whiteMove.textContent = this.history[index];
+      const blackMove = document.createElement('span');
+      blackMove.textContent = this.history[index + 1] || '';
+      row.append(number, whiteMove, blackMove);
+      list.append(row);
+    }
+    list.scrollTop = list.scrollHeight;
+  }
+  renderResult() {
+    const panel = document.querySelector('#chessResult');
+    panel.classList.toggle('hidden', !this.result);
+    if (!this.result) return;
+    document.querySelector('#chessResultTitle').textContent = this.result.type === 'stalemate'
+      ? 'Draw!'
+      : `${this.playerName(this.result.winner)} wins!`;
+    document.querySelector('#chessResultDetail').textContent = this.result.type === 'stalemate'
+      ? 'The game ended in stalemate.'
+      : `Checkmate — ${this.result.winner === 'white' ? 'White' : 'Black'} has won the game.`;
+  }
+}
+ChessGame.bound = false;
 
 class PlaygroundGame {
   constructor() { this.reset(); }
@@ -1420,5 +1802,6 @@ const games = {
   loom: { game: RainbowLoomGame, title: 'Rainbow Loom Lab', kicker: 'A COLORFUL BAND-WEAVING CHALLENGE', hint: 'PICK A COLOR • DRAG BETWEEN PEGS TO WEAVE A MATCH' },
   amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' },
   wordsearch: { game: WordSearchGame, title: 'Word Search', kicker: 'A CALM LETTER-HUNT PUZZLE', hint: 'CHOOSE A LEVEL • TAP THE FIRST AND LAST LETTER OF EACH WORD' },
-  playground: { game: PlaygroundGame, title: 'Playground', kicker: 'A SUNNY RECESS BREAK', hint: 'MOVE THE POINTER • CLICK TO BOUNCE ON THE SWING' }
+  playground: { game: PlaygroundGame, title: 'Playground', kicker: 'A SUNNY RECESS BREAK', hint: 'MOVE THE POINTER • CLICK TO BOUNCE ON THE SWING' },
+  chess: { game: ChessGame, mode: 'chess', title: 'Chess', kicker: 'A CLASSIC TWO-PLAYER STRATEGY GAME', hint: 'SELECT A PIECE TO SEE ITS LEGAL MOVES • TAKE TURNS ON ONE SCREEN' }
 };
