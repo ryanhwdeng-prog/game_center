@@ -55,13 +55,15 @@ function locate(event) { const rect = canvas.getBoundingClientRect(); pointer.x 
 canvas.addEventListener('pointermove', locate);
 canvas.addEventListener('pointerdown', event => { locate(event); pointer.down = true; if (activeGame && activeGame.pointerDown) activeGame.pointerDown(); });
 window.addEventListener('pointerup', () => { pointer.down = false; if (activeGame && activeGame.pointerUp) activeGame.pointerUp(); });
-function showMenu() { cancelAnimationFrame(raf); activeGame = null; chessPanel.classList.add('hidden'); canvasWrap.classList.remove('hidden'); gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
+function showMenu() { cancelAnimationFrame(raf); if (activeGame && typeof activeGame.dispose === 'function') activeGame.dispose(); activeGame = null; chessPanel.classList.add('hidden'); canvasWrap.classList.remove('hidden'); gameView.classList.add('hidden'); notesView.classList.add('hidden'); menuView.classList.remove('hidden'); document.querySelector('#statusText').textContent = 'ARCADE ONLINE'; }
 function startGame(name) {
   if (name === 'notes') {
+    if (activeGame && typeof activeGame.dispose === 'function') activeGame.dispose();
     cancelAnimationFrame(raf); activeGame = null; menuView.classList.add('hidden'); gameView.classList.add('hidden'); notesView.classList.remove('hidden');
     document.querySelector('#statusText').textContent = 'NOTES OPEN'; if (!notesApp) notesApp = new NotesApp(); notesApp.open(); return;
   }
   cancelAnimationFrame(raf);
+  if (activeGame && typeof activeGame.dispose === 'function') activeGame.dispose();
   const selected = games[name];
   if (!selected) return;
   document.querySelector('#undoButton').classList.toggle('hidden', selected.mode !== 'chess');
@@ -91,6 +93,17 @@ class ChessGame {
   constructor() {
     this.mode = 'chess';
     ChessGame.bindEvents();
+    this.aiMode = document.querySelector('#chessMode').value === 'ai';
+    this.aiColor = 'black';
+    this.aiSkill = Number(document.querySelector('#chessSkill').value);
+    this.engineWorker = null;
+    this.engineState = 'loading';
+    this.engineBusy = false;
+    this.engineRequest = null;
+    this.queuedEngineRequest = null;
+    this.engineFailed = false;
+    this.engineError = '';
+    if (this.aiMode) this.initializeEngine();
     this.reset();
   }
   static bindEvents() {
@@ -107,11 +120,34 @@ class ChessGame {
     document.querySelector('#chessNewGame').addEventListener('click', () => {
       if (activeGame && activeGame.mode === 'chess') activeGame.reset();
     });
+    document.querySelector('#chessHintButton').addEventListener('click', () => {
+      if (activeGame && activeGame.mode === 'chess') activeGame.requestHint();
+    });
+    document.querySelector('#chessMode').addEventListener('change', event => {
+      if (activeGame && activeGame.mode === 'chess') activeGame.setOpponentMode(event.currentTarget.value);
+    });
+    document.querySelector('#chessSkill').addEventListener('input', event => {
+      const value = Number(event.currentTarget.value);
+      document.querySelector('#chessSkillValue').value = `${value} / 20`;
+      if (activeGame && activeGame.mode === 'chess') activeGame.aiSkill = value;
+    });
     ['whitePlayerName', 'blackPlayerName'].forEach(id => document.querySelector(`#${id}`).addEventListener('input', () => {
       if (activeGame && activeGame.mode === 'chess') activeGame.renderStatus();
     }));
   }
   reset() {
+    this.cancelEngineRequests();
+    if (this.aiMode && this.engineFailed) {
+      if (this.engineWorker) this.engineWorker.terminate();
+      this.engineWorker = null;
+      this.engineState = 'loading';
+      this.engineFailed = false;
+      this.engineError = '';
+      this.engineBusy = false;
+      this.engineRequest = null;
+      this.queuedEngineRequest = null;
+      this.initializeEngine();
+    }
     const backRank = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
     this.board = [
       backRank.map(type => ({ type, color: 'black' })),
@@ -127,30 +163,176 @@ class ChessGame {
     this.legalTargets = [];
     this.history = [];
     this.undoStack = [];
+    this.uciHistory = [];
     this.result = null;
     this.pendingPromotion = null;
+    this.hintMove = null;
+    document.querySelector('#chessHintMessage').textContent = '';
+    document.querySelector('#chessEngineStatus').textContent = !this.aiMode
+      ? 'Local 2-player mode'
+      : this.engineFailed
+      ? `Stockfish failed to start: ${this.engineError}`
+      : this.engineState === 'ready' ? 'Stockfish ready' : 'Loading Stockfish…';
+    document.querySelector('#chessAiControls').classList.toggle('hidden', !this.aiMode);
+    document.querySelector('#blackPlayerName').previousElementSibling.textContent = this.aiMode
+      ? 'BLACK / STOCKFISH'
+      : 'BLACK PLAYER';
     document.querySelector('#chessPromotion').classList.add('hidden');
     document.querySelector('#chessResult').classList.add('hidden');
     this.render();
+  }
+  initializeEngine() {
+    try {
+      this.engineWorker = new Worker(new URL('chess-engine/stockfish-19-lite-single.js', document.baseURI));
+      this.engineWorker.onmessage = event => this.handleEngineMessage(String(event.data));
+      this.engineWorker.onerror = event => {
+        this.engineFailed = true;
+        this.engineState = 'failed';
+        this.engineError = event.message || 'worker error';
+        this.engineBusy = false;
+        this.engineRequest = null;
+        this.queuedEngineRequest = null;
+        document.querySelector('#chessEngineStatus').textContent = `Stockfish failed to load: ${this.engineError}`;
+        this.renderControls();
+      };
+      this.engineWorker.postMessage('uci');
+    } catch (error) {
+      this.engineFailed = true;
+      this.engineState = 'failed';
+      this.engineError = error.message || String(error);
+      document.querySelector('#chessEngineStatus').textContent = `Stockfish failed to start: ${this.engineError}`;
+      this.renderControls();
+    }
+  }
+  dispose() {
+    this.cancelEngineRequests();
+    if (this.engineWorker) this.engineWorker.terminate();
+    this.engineWorker = null;
+  }
+  setOpponentMode(mode) {
+    const useAI = mode === 'ai';
+    if (this.aiMode === useAI) return;
+    const blackName = document.querySelector('#blackPlayerName');
+    if (blackName.value === (useAI ? 'Player 2' : 'Stockfish AI')) blackName.value = useAI ? 'Stockfish AI' : 'Player 2';
+    this.dispose();
+    this.aiMode = useAI;
+    this.engineState = useAI ? 'loading' : 'idle';
+    this.engineFailed = false;
+    this.engineError = '';
+    this.engineBusy = false;
+    this.engineRequest = null;
+    this.queuedEngineRequest = null;
+    if (useAI) this.initializeEngine();
+    this.reset();
+  }
+  handleEngineMessage(line) {
+    if (line === 'uciok') {
+      this.engineState = 'checking';
+      this.engineWorker.postMessage('isready');
+    } else if (line === 'readyok') {
+      this.engineState = 'ready';
+      document.querySelector('#chessEngineStatus').textContent = 'Stockfish ready';
+      this.dispatchEngineRequest();
+      this.renderControls();
+    } else if (line.startsWith('bestmove ')) {
+      const request = this.engineRequest;
+      this.engineRequest = null;
+      this.engineBusy = false;
+      if (request && !request.cancelled && !this.engineFailed) this.completeEngineRequest(request, line.split(/\s+/)[1]);
+      this.dispatchEngineRequest();
+      this.renderControls();
+    }
+  }
+  dispatchEngineRequest() {
+    if (this.engineState !== 'ready' || this.engineBusy || !this.queuedEngineRequest || this.engineFailed) return;
+    const request = this.queuedEngineRequest;
+    this.queuedEngineRequest = null;
+    this.engineRequest = request;
+    this.engineBusy = true;
+    const skill = request.type === 'hint' ? 20 : this.aiSkill;
+    this.engineWorker.postMessage(`setoption name Skill Level value ${skill}`);
+    this.engineWorker.postMessage(`position startpos${this.uciHistory.length ? ` moves ${this.uciHistory.join(' ')}` : ''}`);
+    this.engineWorker.postMessage(`go depth ${request.type === 'hint' ? 18 : 12}`);
+    document.querySelector('#chessEngineStatus').textContent = request.type === 'hint' ? 'Finding a strong hint…' : 'Stockfish is thinking…';
+    this.renderControls();
+  }
+  requestEngineMove(type) {
+    if (this.engineFailed) return;
+    this.queuedEngineRequest = { type, cancelled: false };
+    this.dispatchEngineRequest();
+    this.renderControls();
+  }
+  cancelEngineRequests() {
+    this.queuedEngineRequest = null;
+    if (this.engineRequest && !this.engineRequest.cancelled) {
+      this.engineRequest.cancelled = true;
+      if (this.engineBusy && this.engineWorker) this.engineWorker.postMessage('stop');
+    }
+  }
+  completeEngineRequest(request, moveText) {
+    if (moveText === '(none)' || moveText === '0000') {
+      if (request.type === 'ai') {
+        this.engineFailed = true;
+        document.querySelector('#chessEngineStatus').textContent = 'Stockfish did not return a move. Undo or reset the game to continue.';
+      }
+      return;
+    }
+    const move = this.findLegalEngineMove(moveText);
+    if (!move) {
+      this.engineFailed = true;
+      document.querySelector('#chessEngineStatus').textContent = `Stockfish returned an invalid move (${moveText}). Please reset the game.`;
+      return;
+    }
+    if (request.type === 'hint') {
+      this.hintMove = move;
+      document.querySelector('#chessHintMessage').textContent = `Hint: ${chessSquareName(move.fromRow, move.fromCol)} to ${chessSquareName(move.toRow, move.toCol)} (${chessPieceNames[this.board[move.fromRow][move.fromCol].type]})`;
+      this.renderBoard();
+    } else if (this.turn === this.aiColor && !this.result) {
+      this.makeMove(move, moveText.length > 4 ? moveText[4].toUpperCase() : 'Q');
+    }
+    document.querySelector('#chessEngineStatus').textContent = request.type === 'hint' ? 'Hint ready · Stockfish skill 20' : 'Stockfish ready';
+  }
+  findLegalEngineMove(moveText) {
+    if (!/^[a-h][1-8][a-h][1-8][qrbn]?$/i.test(moveText)) return null;
+    const fromCol = 'abcdefgh'.indexOf(moveText[0]);
+    const fromRow = 8 - Number(moveText[1]);
+    const toCol = 'abcdefgh'.indexOf(moveText[2]);
+    const toRow = 8 - Number(moveText[3]);
+    return this.legalMovesFrom(fromRow, fromCol).find(move => move.toRow === toRow && move.toCol === toCol) || null;
+  }
+  requestHint() {
+    if (!this.aiMode || this.turn !== 'white' || this.result || this.engineRequest || this.queuedEngineRequest || this.pendingPromotion) return;
+    this.hintMove = null;
+    document.querySelector('#chessHintMessage').textContent = '';
+    this.requestEngineMove('hint');
   }
   playerName(color) {
     const input = document.querySelector(color === 'white' ? '#whitePlayerName' : '#blackPlayerName');
     return input.value.trim() || (color === 'white' ? 'Player 1' : 'Player 2');
   }
   undo() {
-    const previous = this.undoStack.pop();
-    if (!previous) return;
-    this.board = previous.board;
-    this.turn = previous.turn;
-    this.castling = previous.castling;
-    this.enPassant = previous.enPassant;
-    this.history.length = previous.historyLength;
+    if (!this.undoStack.length) return;
+    this.cancelEngineRequests();
+    let previous;
+    do {
+      previous = this.undoStack.pop();
+      this.board = previous.board;
+      this.turn = previous.turn;
+      this.castling = previous.castling;
+      this.enPassant = previous.enPassant;
+      this.history.length = previous.historyLength;
+      this.uciHistory.length = previous.uciHistoryLength;
+    } while (this.aiMode && this.undoStack.length && this.turn !== 'white');
     this.result = null;
     this.selected = null;
     this.legalTargets = [];
     this.pendingPromotion = null;
     document.querySelector('#chessPromotion').classList.add('hidden');
     document.querySelector('#chessResult').classList.add('hidden');
+    document.querySelector('#chessHintMessage').textContent = '';
+    document.querySelector('#chessEngineStatus').textContent = this.engineFailed
+      ? 'Stockfish is unavailable. Reset the game to retry.'
+      : 'Stockfish ready';
     this.render();
   }
   isSquareAttacked(row, col, byColor, board = this.board) {
@@ -266,7 +448,9 @@ class ChessGame {
     return moves;
   }
   chooseSquare(row, col) {
-    if (this.result || this.pendingPromotion) return;
+    if (this.result || this.pendingPromotion || (this.aiMode && (this.turn !== 'white' || this.engineRequest || this.queuedEngineRequest))) return;
+    this.hintMove = null;
+    document.querySelector('#chessHintMessage').textContent = '';
     const piece = this.board[row][col];
     const target = this.legalTargets.find(move => move.toRow === row && move.toCol === col);
     if (this.selected && target) {
@@ -311,7 +495,8 @@ class ChessGame {
       turn: this.turn,
       castling: { white: { ...this.castling.white }, black: { ...this.castling.black } },
       enPassant: this.enPassant && { ...this.enPassant },
-      historyLength: this.history.length
+      historyLength: this.history.length,
+      uciHistoryLength: this.uciHistory.length
     });
     const legal = this.legalMovesFor(this.turn);
     const alternatives = legal.filter(candidate =>
@@ -352,6 +537,7 @@ class ChessGame {
     this.enPassant = piece.type === 'P' && Math.abs(move.toRow - move.fromRow) === 2
       ? { row: (move.toRow + move.fromRow) / 2, col: move.fromCol }
       : null;
+    this.uciHistory.push(`${chessSquareName(move.fromRow, move.fromCol)}${chessSquareName(move.toRow, move.toCol)}${piece.type === 'P' && (move.toRow === 0 || move.toRow === 7) ? promotion.toLowerCase() : ''}`);
     this.turn = this.turn === 'white' ? 'black' : 'white';
     const check = this.isInCheck(this.turn);
     const replies = this.legalMovesFor(this.turn);
@@ -361,6 +547,7 @@ class ChessGame {
     this.legalTargets = [];
     if (!replies.length) this.result = check ? { type: 'checkmate', winner: piece.color } : { type: 'stalemate' };
     this.render();
+    if (this.aiMode && !this.result && this.turn === this.aiColor) this.requestEngineMove('ai');
   }
   render() {
     this.renderBoard();
@@ -368,6 +555,14 @@ class ChessGame {
     this.renderHistory();
     this.renderResult();
     document.querySelector('#undoButton').disabled = this.undoStack.length === 0;
+    this.renderControls();
+  }
+  renderControls() {
+    const waiting = Boolean(this.engineRequest || this.queuedEngineRequest);
+    document.querySelector('#chessAiControls').classList.toggle('hidden', !this.aiMode);
+    document.querySelector('#chessHintButton').disabled = !this.aiMode || this.engineState !== 'ready' || this.engineFailed ||
+      waiting || this.turn !== 'white' || Boolean(this.result) || Boolean(this.pendingPromotion);
+    document.querySelector('#chessSkill').disabled = !this.aiMode || this.engineFailed;
   }
   renderBoard() {
     const boardElement = document.querySelector('#chessBoard');
@@ -383,6 +578,8 @@ class ChessGame {
       if (this.selected?.row === row && this.selected?.col === col) square.classList.add('selected-square');
       const targetMove = this.legalTargets.find(move => move.toRow === row && move.toCol === col);
       if (targetMove) square.classList.add(piece || targetMove.enPassant ? 'capture-square' : 'legal-square');
+      if (this.hintMove?.fromRow === row && this.hintMove?.fromCol === col) square.classList.add('hint-from-square');
+      if (this.hintMove?.toRow === row && this.hintMove?.toCol === col) square.classList.add('hint-to-square');
       if (checkedKing?.row === row && checkedKing?.col === col) square.classList.add('checked-square');
       const coordinate = document.createElement('span');
       coordinate.className = 'square-coordinate';
@@ -404,6 +601,12 @@ class ChessGame {
     const turnElement = document.querySelector('#chessTurn');
     if (this.result) {
       turnElement.textContent = this.result.type === 'stalemate' ? 'Draw by stalemate' : 'Checkmate';
+      return;
+    }
+    if (this.aiMode && this.turn === this.aiColor) {
+      turnElement.textContent = this.engineFailed
+        ? 'Stockfish is unavailable. Undo your move or reset the game.'
+        : 'Stockfish is thinking…';
       return;
     }
     turnElement.textContent = `${this.playerName(this.turn)} to move · ${this.turn === 'white' ? 'White' : 'Black'}${this.isInCheck(this.turn) ? ' · CHECK' : ''}`;
