@@ -9,10 +9,11 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="Game Center Have Fun!">
   <meta property="og:description" content="A collection of small browser games. Choose an adventure and play for free.">
+  <meta name="chess-websocket-url" content="">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20261121-stockfish-fix-1">
+  <link rel="stylesheet" href="styles.css?v=20261123-online-chess-2">
 </head>
 <body>
   <main class="app-shell">
@@ -38,7 +39,7 @@
         <button class="game-card wordsearch-card" data-game="wordsearch"><span class="card-number">12</span><span class="card-art wordsearch-art"><span class="wordsearch-letters letters-one">S T A R</span><span class="wordsearch-letters letters-two">M O O N</span><span class="wordsearch-string"></span><span class="wordsearch-mark">✦</span></span><span class="card-info"><span class="card-kicker">A CALM LETTER-HUNT PUZZLE</span><strong>Word Search</strong><span>Choose a difficulty, connect hidden words, and find them all at your own pace.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
         <button class="game-card playground-card" data-game="playground"><span class="card-number">13</span><span class="card-art playground-art" aria-hidden="true"><span class="playground-sun"></span><span class="playground-cloud cloud-one"></span><span class="playground-cloud cloud-two"></span><span class="playground-slide"></span><span class="playground-swing"></span><span class="playground-frame"></span><span class="playground-climber"></span><span class="playground-sandbox"></span></span><span class="card-info"><span class="card-kicker">A SUNNY RECESS BREAK</span><strong>Playground</strong><span>Swings, a slide, a climbing frame, and a bright little corner built for a perfect after-school play break.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
         <a class="game-card piano-card" href="https://www.sheetmusicdirect.com/se/ID_No/507284/Product.aspx?srsltid=AYCX9vJabnYSfv512--ifmcqlb2jAwF0oGG0wJr8dA0E_DD7b9T65IRt" target="_blank" rel="noopener noreferrer"><span class="card-number">14</span><span class="card-art piano-art" aria-hidden="true"><span class="piano-glow"></span><span class="piano-mini-keys"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><span class="piano-notes">♪ ♫</span></span><span class="card-info"><span class="card-kicker">SHEET MUSIC</span><strong>Ryan's piano music</strong><span>Open the sheet music on Sheet Music Direct.</span><span class="card-cta">OPEN SHEET MUSIC <b>↗</b></span></span></a>
-        <button class="game-card chess-card" data-game="chess"><span class="card-number">15</span><span class="card-art chess-art" aria-hidden="true"><span class="chess-card-board">♜ ♞ ♝ ♛<br>♟ ♟ ♟ ♟<br>♙ ♙ ♙ ♙<br>♖ ♘ ♗ ♕</span><span class="chess-card-glow"></span></span><span class="card-info"><span class="card-kicker">CLASSIC STRATEGY / TWO WAYS TO PLAY</span><strong>Chess</strong><span>Challenge Stockfish or take turns face-to-face on one screen.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
+        <button class="game-card chess-card" data-game="chess"><span class="card-number">15</span><span class="card-art chess-art" aria-hidden="true"><span class="chess-card-board">♜ ♞ ♝ ♛<br>♟ ♟ ♟ ♟<br>♙ ♙ ♙ ♙<br>♖ ♘ ♗ ♕</span><span class="chess-card-glow"></span></span><span class="card-info"><span class="card-kicker">CLASSIC STRATEGY / THREE WAYS TO PLAY</span><strong>Chess</strong><span>Challenge Stockfish, pass-and-play, or invite a friend online.</span><span class="card-cta">PLAY GAME <b>↗</b></span></span></button>
       </div>
       <p class="menu-foot">MOVE WITH YOUR MOUSE / TOUCH &nbsp;•&nbsp; ESC TO RETURN</p>
     </section>
@@ -49,7 +50,7 @@
         <div class="chess-board-column"><p class="chess-instructions">Select a piece to see its legal moves, then choose a highlighted square.</p><div class="chess-board" id="chessBoard" role="grid" aria-label="Chess board"></div></div>
         <aside class="chess-sidebar">
           <div class="chess-players">
-            <label class="chess-player"><span class="chess-player-label">PLAY MODE</span><select id="chessMode" aria-label="Chess play mode"><option value="ai">Play Stockfish</option><option value="local">Local 2-player</option></select></label>
+            <label class="chess-player"><span class="chess-player-label">PLAY MODE</span><select id="chessMode" aria-label="Chess play mode"><option value="ai">Play Stockfish</option><option value="local">Local 2-player</option><option value="online">Online 2-player</option></select></label>
             <label class="chess-player black-player"><span class="chess-player-label">BLACK / STOCKFISH</span><input id="blackPlayerName" type="text" maxlength="24" value="Stockfish AI" aria-label="AI player name"></label>
             <label class="chess-player white-player"><span class="chess-player-label">WHITE / MOVES FIRST</span><input id="whitePlayerName" type="text" maxlength="24" value="Player 1" aria-label="White player name"></label>
           </div>
@@ -62,6 +63,17 @@
             <p id="chessEngineStatus" class="chess-engine-status" aria-live="polite">Loading Stockfish…</p>
             <p id="chessHintMessage" class="chess-hint-message" aria-live="polite"></p>
             <a class="chess-engine-credit" href="chess-engine/Copying.txt" target="_blank" rel="noopener noreferrer">Stockfish 19 Lite · GPL v3</a>
+          </div>
+          <div id="chessOnlineControls" class="chess-online-controls hidden">
+            <div id="chessOnlineLobby" class="chess-online-lobby">
+              <label class="chess-online-field">YOUR NAME<input id="onlinePlayerName" type="text" maxlength="24" value="Player 1" autocomplete="nickname"></label>
+              <button id="chessCreateRoom" type="button">CREATE ROOM</button>
+              <label class="chess-online-field">ROOM CODE<input id="chessJoinCode" type="text" maxlength="6" placeholder="ABC123" autocomplete="off"></label>
+              <button id="chessJoinRoom" type="button">JOIN ROOM</button>
+            </div>
+            <button id="chessReconnectRoom" class="hidden" type="button">RECONNECT</button>
+            <div id="chessOnlineRoom" class="chess-online-room hidden"><span>ROOM CODE</span><strong id="chessOnlineRoomCode"></strong><button id="chessLeaveRoom" type="button">LEAVE ROOM</button></div>
+            <p id="chessOnlineStatus" class="chess-online-status" aria-live="polite">Create a room or enter a code to join a friend.</p>
           </div>
           <p class="chess-piece-key"><strong>PIECE GUIDE</strong><span>♔ King</span><span>♕ Queen</span><span>♖ Rook</span><span>♗ Bishop</span><span>♘ Knight</span><span>♙ Pawn</span></p>
           <section class="chess-moves" aria-labelledby="chessMovesTitle"><h3 id="chessMovesTitle">MOVE HISTORY</h3><div id="chessMoveList" class="chess-move-list" aria-live="polite"></div></section>
@@ -78,6 +90,6 @@
       </div>
     </section>
   </main>
-  <script src="app.js?v=20261121-stockfish-fix-1"></script>
+  <script src="app.js?v=20261123-online-chess-3"></script>
 </body>
 </html>

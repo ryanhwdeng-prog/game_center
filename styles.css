@@ -125,6 +125,17 @@ button { font:inherit; color:inherit; cursor:pointer; }
 .chess-hint-message:empty { display:none; }
 .chess-engine-credit { margin-top:-7px; color:#85897f; font:10px "DM Mono",monospace; text-decoration:none; }
 .chess-engine-credit:hover { text-decoration:underline; }
+.chess-online-controls { display:flex; flex-direction:column; gap:10px; padding:12px; border:1px solid #d5cebf; border-radius:4px; background:#fffdf8; }
+.chess-online-lobby { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.chess-online-field { display:flex; min-width:0; flex-direction:column; gap:5px; color:#7a8178; font:500 10px "DM Mono",monospace; letter-spacing:.08em; }
+.chess-online-field input { width:100%; min-width:0; border:1px solid #d5cebf; border-radius:3px; padding:9px; color:#202d24; background:#fff; font:600 14px "Space Grotesk",sans-serif; letter-spacing:normal; }
+.chess-online-controls button { min-height:36px; border:1px solid #bca84f; border-radius:3px; padding:8px 10px; color:#263c30; background:#f4d84e; font:500 10px "DM Mono",monospace; letter-spacing:.05em; }
+.chess-online-controls button:disabled { opacity:.5; cursor:not-allowed; }
+.chess-online-room { display:flex; align-items:center; gap:8px; }
+.chess-online-room > span { color:#7a8178; font:500 10px "DM Mono",monospace; letter-spacing:.08em; }
+.chess-online-room > strong { flex:1; color:#263c30; font:600 20px "DM Mono",monospace; letter-spacing:.15em; }
+.chess-online-room > button { padding:8px; }
+.chess-online-status { margin:0; color:#68716a; font:11px "DM Mono",monospace; line-height:1.45; }
 .chess-piece-key { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px 4px; margin:0; padding:12px; border:1px solid #d5cebf; border-radius:4px; background:#f7f3e9; }
 .chess-piece-key strong { grid-column:1/-1; margin-bottom:2px; }
 .chess-piece-key span { color:#535c52; font-size:12px; }

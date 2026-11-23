@@ -1,0 +1,2 @@
+python-chess>=1.999,<2
+websockets>=13.1,<16

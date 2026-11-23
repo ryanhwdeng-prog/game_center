@@ -93,18 +93,28 @@ class ChessGame {
   constructor() {
     this.mode = 'chess';
     ChessGame.bindEvents();
-    this.aiMode = document.querySelector('#chessMode').value === 'ai';
+    this.playMode = document.querySelector('#chessMode').value;
+    this.aiMode = this.playMode === 'ai';
+    this.onlineMode = this.playMode === 'online';
     this.aiColor = 'black';
     this.aiSkill = Number(document.querySelector('#chessSkill').value);
     this.engineWorker = null;
-    this.engineState = 'loading';
+    this.engineState = this.aiMode ? 'loading' : 'idle';
     this.engineBusy = false;
     this.engineRequest = null;
     this.queuedEngineRequest = null;
     this.engineFailed = false;
     this.engineError = '';
+    this.onlineSocket = null;
+    this.onlineRoomCode = '';
+    this.onlineToken = '';
+    this.onlineColor = '';
+    this.onlineConnecting = false;
+    this.onlineReady = false;
+    this.onlineOpponentPresent = false;
+    this.onlineMovePending = false;
     if (this.aiMode) this.initializeEngine();
-    this.reset();
+    this.resetPosition();
   }
   static bindEvents() {
     if (ChessGame.bound) return;
@@ -126,6 +136,23 @@ class ChessGame {
     document.querySelector('#chessMode').addEventListener('change', event => {
       if (activeGame && activeGame.mode === 'chess') activeGame.setOpponentMode(event.currentTarget.value);
     });
+    document.querySelector('#chessCreateRoom').addEventListener('click', () => {
+      if (activeGame && activeGame.mode === 'chess') activeGame.connectOnline('create');
+    });
+    document.querySelector('#chessJoinRoom').addEventListener('click', () => {
+      if (activeGame && activeGame.mode === 'chess') {
+        activeGame.connectOnline('join', document.querySelector('#chessJoinCode').value.trim().toUpperCase());
+      }
+    });
+    document.querySelector('#chessReconnectRoom').addEventListener('click', () => {
+      if (activeGame && activeGame.mode === 'chess') activeGame.reconnectOnline();
+    });
+    document.querySelector('#chessLeaveRoom').addEventListener('click', () => {
+      if (activeGame && activeGame.mode === 'chess') activeGame.leaveOnlineRoom();
+    });
+    document.querySelector('#chessJoinCode').addEventListener('input', event => {
+      event.currentTarget.value = event.currentTarget.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+    });
     document.querySelector('#chessSkill').addEventListener('input', event => {
       const value = Number(event.currentTarget.value);
       document.querySelector('#chessSkillValue').value = `${value} / 20`;
@@ -136,6 +163,15 @@ class ChessGame {
     }));
   }
   reset() {
+    if (this.onlineMode) {
+      if (!this.onlineReady || !this.onlineSocket || this.onlineSocket.readyState !== WebSocket.OPEN) {
+        document.querySelector('#chessOnlineStatus').textContent = 'Connect to a room before requesting a rematch.';
+        return;
+      }
+      this.sendOnline({ type: 'rematch' });
+      document.querySelector('#chessOnlineStatus').textContent = 'Rematch requested. Waiting for the other player.';
+      return;
+    }
     this.cancelEngineRequests();
     if (this.aiMode && this.engineFailed) {
       if (this.engineWorker) this.engineWorker.terminate();
@@ -148,6 +184,10 @@ class ChessGame {
       this.queuedEngineRequest = null;
       this.initializeEngine();
     }
+    this.resetPosition();
+  }
+  resetPosition() {
+    this.cancelEngineRequests();
     const backRank = ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'];
     this.board = [
       backRank.map(type => ({ type, color: 'black' })),
@@ -167,6 +207,7 @@ class ChessGame {
     this.result = null;
     this.pendingPromotion = null;
     this.hintMove = null;
+    this.onlineMovePending = false;
     document.querySelector('#chessHintMessage').textContent = '';
     document.querySelector('#chessEngineStatus').textContent = !this.aiMode
       ? 'Local 2-player mode'
@@ -174,9 +215,11 @@ class ChessGame {
       ? `Stockfish failed to start: ${this.engineError}`
       : this.engineState === 'ready' ? 'Stockfish ready' : 'Loading Stockfish…';
     document.querySelector('#chessAiControls').classList.toggle('hidden', !this.aiMode);
+    document.querySelector('#chessOnlineControls').classList.toggle('hidden', !this.onlineMode);
     document.querySelector('#blackPlayerName').previousElementSibling.textContent = this.aiMode
       ? 'BLACK / STOCKFISH'
       : 'BLACK PLAYER';
+    this.updateOnlineControls();
     document.querySelector('#chessPromotion').classList.add('hidden');
     document.querySelector('#chessResult').classList.add('hidden');
     this.render();
@@ -205,25 +248,269 @@ class ChessGame {
     }
   }
   dispose() {
+    const hadOnlineRoom = Boolean(this.onlineRoomCode || this.onlineSocket);
     this.cancelEngineRequests();
     if (this.engineWorker) this.engineWorker.terminate();
     this.engineWorker = null;
+    if (this.onlineSocket) {
+      if (this.onlineSocket.readyState === WebSocket.OPEN) {
+        this.onlineSocket.send(JSON.stringify({ type: 'leave' }));
+      }
+      this.onlineSocket.close();
+      this.onlineSocket = null;
+    }
+    this.onlineRoomCode = '';
+    this.onlineToken = '';
+    this.onlineColor = '';
+    this.onlineConnecting = false;
+    this.onlineReady = false;
+    this.onlineOpponentPresent = false;
+    if (hadOnlineRoom) this.clearSavedOnlineRoom();
+  }
+  leaveOnlineRoom() {
+    if (this.onlineSocket) {
+      if (this.onlineSocket.readyState === WebSocket.OPEN) {
+        this.onlineSocket.send(JSON.stringify({ type: 'leave' }));
+      }
+      this.onlineSocket.close();
+    }
+    this.onlineSocket = null;
+    this.onlineRoomCode = '';
+    this.onlineToken = '';
+    this.onlineColor = '';
+    this.onlineConnecting = false;
+    this.onlineReady = false;
+    this.onlineOpponentPresent = false;
+    this.onlineMovePending = false;
+    this.clearSavedOnlineRoom();
+    this.resetPosition();
+    document.querySelector('#chessOnlineStatus').textContent = 'You left the room. Create a room or enter a code to join a friend.';
   }
   setOpponentMode(mode) {
+    if (mode === this.playMode) return;
     const useAI = mode === 'ai';
-    if (this.aiMode === useAI) return;
     const blackName = document.querySelector('#blackPlayerName');
     if (blackName.value === (useAI ? 'Player 2' : 'Stockfish AI')) blackName.value = useAI ? 'Stockfish AI' : 'Player 2';
     this.dispose();
+    this.playMode = mode;
     this.aiMode = useAI;
+    this.onlineMode = mode === 'online';
     this.engineState = useAI ? 'loading' : 'idle';
     this.engineFailed = false;
     this.engineError = '';
     this.engineBusy = false;
     this.engineRequest = null;
     this.queuedEngineRequest = null;
+    this.onlineRoomCode = '';
+    this.onlineToken = '';
+    this.onlineColor = '';
+    this.onlineReady = false;
+    this.onlineOpponentPresent = false;
+    this.onlineMovePending = false;
     if (useAI) this.initializeEngine();
-    this.reset();
+    this.resetPosition();
+  }
+  connectOnline(action, code = '', token = '') {
+    if (!this.onlineMode || this.onlineConnecting || (this.onlineSocket && this.onlineSocket.readyState < WebSocket.CLOSING)) return;
+    if (location.protocol === 'file:') {
+      document.querySelector('#chessOnlineStatus').textContent = 'Online play needs the page served over HTTP or HTTPS. Start scores_server.py, then open its local website URL.';
+      return;
+    }
+    const endpoint = document.querySelector('meta[name="chess-websocket-url"]').content.trim();
+    const socketUrl = endpoint || `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.hostname}:8766`;
+    const name = document.querySelector('#onlinePlayerName').value.trim();
+    this.onlineConnecting = true;
+    document.querySelector('#chessOnlineStatus').textContent = action === 'create'
+      ? 'Connecting to create a room…'
+      : action === 'reconnect' ? 'Reconnecting to your room…' : 'Connecting to join the room…';
+    this.updateOnlineControls();
+    let socket;
+    try {
+      socket = new WebSocket(socketUrl);
+    } catch (error) {
+      this.onlineConnecting = false;
+      document.querySelector('#chessOnlineStatus').textContent = `Could not start the online connection: ${error.message}`;
+      this.updateOnlineControls();
+      return;
+    }
+    this.onlineSocket = socket;
+    socket.addEventListener('open', () => {
+      if (this.onlineSocket !== socket) return;
+      socket.send(JSON.stringify({ type: action, name, code, token }));
+    });
+    socket.addEventListener('message', event => {
+      if (this.onlineSocket !== socket) return;
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch (error) {
+        document.querySelector('#chessOnlineStatus').textContent = `Invalid server response: ${error.message}`;
+        return;
+      }
+      this.handleOnlineMessage(message);
+    });
+    socket.addEventListener('error', () => {
+      if (this.onlineSocket === socket) {
+        document.querySelector('#chessOnlineStatus').textContent = 'Could not reach the online game server. Check its URL, that it supports WebSockets, and that ALLOWED_ORIGINS includes this website.';
+      }
+    });
+    socket.addEventListener('close', () => {
+      if (this.onlineSocket !== socket) return;
+      this.onlineConnecting = false;
+      this.onlineReady = false;
+      this.onlineOpponentPresent = false;
+      this.onlineMovePending = false;
+      const status = document.querySelector('#chessOnlineStatus');
+      if (this.onlineRoomCode) status.textContent = 'Disconnected. Reconnect to continue this room.';
+      else if (!status.textContent.startsWith('Could not reach')) status.textContent = 'Disconnected from the online game server.';
+      this.updateOnlineControls();
+      this.render();
+    });
+  }
+  reconnectOnline() {
+    let saved;
+    try {
+      saved = JSON.parse(sessionStorage.getItem('game-center-chess-online') || 'null');
+    } catch (error) {
+      document.querySelector('#chessOnlineStatus').textContent = `Could not read saved room details: ${error.message}`;
+      return;
+    }
+    if (!saved || typeof saved.code !== 'string' || typeof saved.token !== 'string') {
+      document.querySelector('#chessOnlineStatus').textContent = 'No saved room to reconnect to.';
+      this.updateOnlineControls();
+      return;
+    }
+    this.onlineRoomCode = saved.code;
+    this.onlineToken = saved.token;
+    if (typeof saved.name === 'string') document.querySelector('#onlinePlayerName').value = saved.name;
+    this.connectOnline('join', saved.code, saved.token);
+  }
+  handleOnlineMessage(message) {
+    if (!message || typeof message !== 'object') return;
+    if (message.type === 'error') {
+      this.onlineConnecting = false;
+      this.onlineMovePending = false;
+      document.querySelector('#chessOnlineStatus').textContent = message.message || 'The server rejected that request.';
+      if (!this.onlineReady && this.onlineSocket) {
+        this.onlineSocket.close();
+        this.onlineSocket = null;
+      }
+      this.updateOnlineControls();
+      this.render();
+    } else if (message.type === 'room_state') {
+      this.onlineConnecting = false;
+      this.onlineReady = true;
+      this.onlineRoomCode = message.code;
+      this.onlineToken = message.token;
+      this.onlineColor = message.color;
+      this.onlineOpponentPresent = message.connected === true;
+      this.onlineMovePending = false;
+      const players = message.players || {};
+      document.querySelector('#whitePlayerName').value = players.white?.name || 'Waiting for player';
+      document.querySelector('#blackPlayerName').value = players.black?.name || 'Waiting for player';
+      try {
+        sessionStorage.setItem('game-center-chess-online', JSON.stringify({
+          code: this.onlineRoomCode,
+          token: this.onlineToken,
+          name: document.querySelector('#onlinePlayerName').value.trim()
+        }));
+      } catch (error) {
+        document.querySelector('#chessOnlineStatus').textContent = `Room connected, but reconnect details could not be saved: ${error.message}`;
+      }
+      this.applyOnlineState(message);
+      document.querySelector('#chessOnlineStatus').textContent = this.onlineOpponentPresent
+        ? `Room ${this.onlineRoomCode} · ${this.playerName(this.onlineColor)} is ${this.onlineColor}.`
+        : `Room ${this.onlineRoomCode} created. Waiting for an opponent.`;
+      this.updateOnlineControls();
+    } else if (message.type === 'opponent_disconnected') {
+      this.onlineOpponentPresent = false;
+      document.querySelector('#chessOnlineStatus').textContent = `${message.name || 'Your opponent'} disconnected. Waiting for them to reconnect.`;
+      this.updateOnlineControls();
+      this.render();
+    } else if (message.type === 'rematch_pending') {
+      document.querySelector('#chessOnlineStatus').textContent = `${message.name || 'A player'} requested a rematch. Press REMATCH to agree.`;
+    } else if (message.type === 'left') {
+      document.querySelector('#chessOnlineStatus').textContent = 'You left the room.';
+    }
+  }
+  applyOnlineState(message) {
+    const moves = Array.isArray(message.moves) ? message.moves : [];
+    let commonMoves = 0;
+    while (commonMoves < this.uciHistory.length && commonMoves < moves.length &&
+      this.uciHistory[commonMoves] === moves[commonMoves]) commonMoves++;
+    if (commonMoves !== this.uciHistory.length) {
+      this.resetPosition();
+      commonMoves = 0;
+    }
+    for (let index = commonMoves; index < moves.length; index++) {
+      const moveText = moves[index];
+      const move = this.findLegalEngineMove(moveText);
+      if (!move) {
+        document.querySelector('#chessOnlineStatus').textContent = `Server sent an invalid move (${moveText}). Please reconnect.`;
+        return;
+      }
+      this.makeMove(move, moveText.length > 4 ? moveText[4].toUpperCase() : 'Q');
+    }
+    this.result = message.result?.type === 'checkmate'
+      ? { type: 'checkmate', winner: message.result.winner }
+      : message.result?.type === 'draw' ? { type: 'draw' } : null;
+    this.onlineMovePending = false;
+    this.render();
+  }
+  submitOnlineMove(move, promotion = 'Q') {
+    if (!this.onlineReady || !this.onlineOpponentPresent || this.onlineColor !== this.turn || this.onlineMovePending) return;
+    const piece = this.board[move.fromRow][move.fromCol];
+    if (!piece) return;
+    const uci = `${chessSquareName(move.fromRow, move.fromCol)}${chessSquareName(move.toRow, move.toCol)}${piece.type === 'P' && (move.toRow === 0 || move.toRow === 7) ? promotion.toLowerCase() : ''}`;
+    if (!this.sendOnline({ type: 'move', uci })) return;
+    this.onlineMovePending = true;
+    this.selected = null;
+    this.legalTargets = [];
+    document.querySelector('#chessOnlineStatus').textContent = 'Move sent. Waiting for the server…';
+    this.render();
+  }
+  sendOnline(message) {
+    if (!this.onlineSocket || this.onlineSocket.readyState !== WebSocket.OPEN) {
+      document.querySelector('#chessOnlineStatus').textContent = 'Not connected to the online game server.';
+      return false;
+    }
+    this.onlineSocket.send(JSON.stringify(message));
+    return true;
+  }
+  updateOnlineControls() {
+    const hasRoom = Boolean(this.onlineRoomCode);
+    document.querySelector('#chessOnlineControls').classList.toggle('hidden', !this.onlineMode);
+    document.querySelector('#chessOnlineLobby').classList.toggle('hidden', hasRoom);
+    document.querySelector('#chessOnlineRoom').classList.toggle('hidden', !hasRoom);
+    document.querySelector('#chessOnlineRoomCode').textContent = this.onlineRoomCode || '';
+    let savedCode = '';
+    if (this.onlineMode && !hasRoom) {
+      try {
+        const saved = JSON.parse(sessionStorage.getItem('game-center-chess-online') || 'null');
+        if (saved && typeof saved.code === 'string' && typeof saved.token === 'string') savedCode = saved.code;
+      } catch (error) {
+        document.querySelector('#chessOnlineStatus').textContent = `Could not read saved room details: ${error.message}`;
+      }
+    }
+    const canReconnect = hasRoom || Boolean(savedCode);
+    document.querySelector('#chessReconnectRoom').textContent = hasRoom ? 'RECONNECT' : `RECONNECT TO ${savedCode}`;
+    document.querySelector('#chessReconnectRoom').classList.toggle('hidden', !canReconnect || this.onlineReady || this.onlineConnecting);
+    document.querySelector('#chessLeaveRoom').classList.toggle('hidden', !hasRoom);
+    document.querySelector('#undoButton').disabled = this.onlineMode || this.undoStack.length === 0;
+    document.querySelector('#whitePlayerName').disabled = this.onlineMode;
+    document.querySelector('#blackPlayerName').disabled = this.onlineMode;
+    document.querySelector('#undoButton').disabled = this.onlineMode || this.undoStack.length === 0;
+    document.querySelector('#resetButton').textContent = this.onlineMode ? 'REMATCH' : 'RESET R';
+    document.querySelector('#chessCreateRoom').disabled = this.onlineConnecting;
+    document.querySelector('#chessJoinRoom').disabled = this.onlineConnecting;
+    document.querySelector('#chessReconnectRoom').disabled = this.onlineConnecting;
+  }
+  clearSavedOnlineRoom() {
+    try {
+      sessionStorage.removeItem('game-center-chess-online');
+    } catch (error) {
+      document.querySelector('#chessOnlineStatus').textContent = `Could not clear saved room details: ${error.message}`;
+    }
   }
   handleEngineMessage(line) {
     if (line === 'uciok') {
@@ -448,7 +735,9 @@ class ChessGame {
     return moves;
   }
   chooseSquare(row, col) {
-    if (this.result || this.pendingPromotion || (this.aiMode && (this.turn !== 'white' || this.engineRequest || this.queuedEngineRequest))) return;
+    if (this.result || this.pendingPromotion ||
+      (this.aiMode && (this.turn !== 'white' || this.engineRequest || this.queuedEngineRequest)) ||
+      (this.onlineMode && (!this.onlineReady || !this.onlineOpponentPresent || this.onlineColor !== this.turn || this.onlineMovePending))) return;
     this.hintMove = null;
     document.querySelector('#chessHintMessage').textContent = '';
     const piece = this.board[row][col];
@@ -457,7 +746,8 @@ class ChessGame {
       if (this.board[this.selected.row][this.selected.col].type === 'P' && (row === 0 || row === 7)) {
         this.pendingPromotion = target;
         this.showPromotionChoices();
-      } else this.makeMove(target);
+      } else if (this.onlineMode) this.submitOnlineMove(target);
+      else this.makeMove(target);
       return;
     }
     if (piece?.color === this.turn) {
@@ -485,7 +775,8 @@ class ChessGame {
     const move = this.pendingPromotion;
     this.pendingPromotion = null;
     document.querySelector('#chessPromotion').classList.add('hidden');
-    this.makeMove(move, type);
+    if (this.onlineMode) this.submitOnlineMove(move, type);
+    else this.makeMove(move, type);
   }
   makeMove(move, promotion = 'Q') {
     const piece = this.board[move.fromRow][move.fromCol];
@@ -563,6 +854,7 @@ class ChessGame {
     document.querySelector('#chessHintButton').disabled = !this.aiMode || this.engineState !== 'ready' || this.engineFailed ||
       waiting || this.turn !== 'white' || Boolean(this.result) || Boolean(this.pendingPromotion);
     document.querySelector('#chessSkill').disabled = !this.aiMode || this.engineFailed;
+    this.updateOnlineControls();
   }
   renderBoard() {
     const boardElement = document.querySelector('#chessBoard');
@@ -600,7 +892,21 @@ class ChessGame {
   renderStatus() {
     const turnElement = document.querySelector('#chessTurn');
     if (this.result) {
-      turnElement.textContent = this.result.type === 'stalemate' ? 'Draw by stalemate' : 'Checkmate';
+      turnElement.textContent = this.result.type === 'draw' || this.result.type === 'stalemate' ? 'The game is a draw' : 'Checkmate';
+      return;
+    }
+    if (this.onlineMode) {
+      if (!this.onlineRoomCode || !this.onlineReady) {
+        turnElement.textContent = 'Create or join a room to play online.';
+      } else if (!this.onlineOpponentPresent) {
+        turnElement.textContent = `${this.playerName(this.onlineColor)} is ${this.onlineColor}. Waiting for an opponent.`;
+      } else if (this.onlineMovePending) {
+        turnElement.textContent = 'Move sent · Waiting for the server…';
+      } else if (this.turn === this.onlineColor) {
+        turnElement.textContent = `Your turn · ${this.turn === 'white' ? 'White' : 'Black'}`;
+      } else {
+        turnElement.textContent = `${this.playerName(this.turn)} to move · Waiting`;
+      }
       return;
     }
     if (this.aiMode && this.turn === this.aiColor) {
@@ -639,11 +945,13 @@ class ChessGame {
     const panel = document.querySelector('#chessResult');
     panel.classList.toggle('hidden', !this.result);
     if (!this.result) return;
-    document.querySelector('#chessResultTitle').textContent = this.result.type === 'stalemate'
+    const isDraw = this.result.type === 'stalemate' || this.result.type === 'draw';
+    document.querySelector('#chessResultTitle').textContent = isDraw
       ? 'Draw!'
       : `${this.playerName(this.result.winner)} wins!`;
     document.querySelector('#chessResultDetail').textContent = this.result.type === 'stalemate'
       ? 'The game ended in stalemate.'
+      : this.result.type === 'draw' ? 'The game ended in a draw.'
       : `Checkmate — ${this.result.winner === 'white' ? 'White' : 'Black'} has won the game.`;
   }
 }
@@ -2006,5 +2314,5 @@ const games = {
   amazon: { game: AmazonCartGame, title: 'Amazon Shopping Cart', kicker: 'A PRETEND SHOPPING SPREE', hint: 'ADD DEALS • APPLY A-Z15 • CHECK OUT BEFORE TIME RUNS OUT • PRESS L FOR LEADERBOARD' },
   wordsearch: { game: WordSearchGame, title: 'Word Search', kicker: 'A CALM LETTER-HUNT PUZZLE', hint: 'CHOOSE A LEVEL • TAP THE FIRST AND LAST LETTER OF EACH WORD' },
   playground: { game: PlaygroundGame, title: 'Playground', kicker: 'A SUNNY RECESS BREAK', hint: 'MOVE THE POINTER • CLICK TO BOUNCE ON THE SWING' },
-  chess: { game: ChessGame, mode: 'chess', title: 'Chess', kicker: 'A CLASSIC TWO-PLAYER STRATEGY GAME', hint: 'SELECT A PIECE TO SEE ITS LEGAL MOVES • TAKE TURNS ON ONE SCREEN' }
+  chess: { game: ChessGame, mode: 'chess', title: 'Chess', kicker: 'A CLASSIC TWO-PLAYER STRATEGY GAME', hint: 'CHOOSE STOCKFISH, LOCAL, OR ONLINE PLAY' }
 };
