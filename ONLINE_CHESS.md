@@ -64,9 +64,11 @@ with `python online_chess_server.py`. Configure:
 - `HOST`: defaults to `0.0.0.0`.
 
 For Render, connect this repository as a Blueprint and use the included
-`render.yaml`. Render will ask for `ALLOWED_ORIGINS`; enter the exact origin
-of the existing Game Center website. After deployment, copy the service
-hostname from Render and use it in the meta tag below.
+`render.yaml`, which explicitly selects the Free compute plan. Render will
+ask for `ALLOWED_ORIGINS`; enter the exact origin of the existing Game Center
+website. After deployment, copy the service hostname from Render and use it
+in the meta tag below. Check the selected plan and account usage in Render
+before confirming deployment.
 
 Set the `chess-websocket-url` meta tag in `index.html` to the hosted endpoint,
 for example:
