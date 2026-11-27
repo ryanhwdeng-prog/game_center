@@ -204,6 +204,7 @@ class ChessGame {
     this.history = [];
     this.undoStack = [];
     this.uciHistory = [];
+    this.lastMove = null;
     this.result = null;
     this.pendingPromotion = null;
     this.hintMove = null;
@@ -609,6 +610,7 @@ class ChessGame {
       this.enPassant = previous.enPassant;
       this.history.length = previous.historyLength;
       this.uciHistory.length = previous.uciHistoryLength;
+      this.lastMove = previous.lastMove;
     } while (this.aiMode && this.undoStack.length && this.turn !== 'white');
     this.result = null;
     this.selected = null;
@@ -787,8 +789,15 @@ class ChessGame {
       castling: { white: { ...this.castling.white }, black: { ...this.castling.black } },
       enPassant: this.enPassant && { ...this.enPassant },
       historyLength: this.history.length,
-      uciHistoryLength: this.uciHistory.length
+      uciHistoryLength: this.uciHistory.length,
+      lastMove: this.lastMove && { ...this.lastMove }
     });
+    this.lastMove = {
+      fromRow: move.fromRow,
+      fromCol: move.fromCol,
+      toRow: move.toRow,
+      toCol: move.toCol
+    };
     const legal = this.legalMovesFor(this.turn);
     const alternatives = legal.filter(candidate =>
       (candidate.fromRow !== move.fromRow || candidate.fromCol !== move.fromCol) &&
@@ -867,6 +876,10 @@ class ChessGame {
       square.type = 'button';
       square.className = `chess-square ${(row + col) % 2 ? 'dark-square' : 'light-square'}`;
       square.dataset.row = row; square.dataset.col = col;
+      if ((this.lastMove?.fromRow === row && this.lastMove?.fromCol === col) ||
+          (this.lastMove?.toRow === row && this.lastMove?.toCol === col)) {
+        square.classList.add('last-move-square');
+      }
       if (this.selected?.row === row && this.selected?.col === col) square.classList.add('selected-square');
       const targetMove = this.legalTargets.find(move => move.toRow === row && move.toCol === col);
       if (targetMove) square.classList.add(piece || targetMove.enPassant ? 'capture-square' : 'legal-square');
