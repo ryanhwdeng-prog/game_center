@@ -30,6 +30,28 @@ on port `8766` by default and validates every move before broadcasting it.
 The default allowed website origins are `http://localhost:8000` and
 `http://127.0.0.1:8000`.
 
+## Play on the same Wi-Fi network
+
+On the host computer, find its Wi-Fi IPv4 address with `ipconfig` (for example,
+`192.168.68.133`). Start `scores_server.py` as usual, then start the WebSocket
+server with that address included in its allowed origins:
+
+```powershell
+$env:ALLOWED_ORIGINS="http://localhost:8000,http://127.0.0.1:8000,http://192.168.68.133:8000"
+.\.venv\Scripts\python.exe online_chess_server.py
+```
+
+Replace the example address with the host computer's current IPv4 address.
+On the other device, open `http://192.168.68.133:8000`, choose Chess, select
+**Online 2-player**, and join using the room code. The page uses that same
+address for its WebSocket connection on port `8766`.
+
+If another device cannot open the page, allow inbound TCP ports `8000` and
+`8766` through Windows Firewall on the **Private** profile only, and mark the
+Wi-Fi network Private only if it is trusted. Guest Wi-Fi and access-point
+isolation can also prevent devices from reaching each other. The host's
+address may change when its router renews DHCP.
+
 ## Host online
 
 Deploy `online_chess_server.py` on a service that supports WebSockets and
